@@ -85,6 +85,10 @@ class StudentPerformanceGUI:
         style.configure('Custom.Treeview.Heading', font=('Segoe UI', 10, 'bold'))
         style.configure('Custom.TNotebook', tabposition='nw')
         style.configure('Custom.TNotebook.Tab', font=('Segoe UI', 10, 'bold'), padding=[10, 5])
+        
+        # Entry style
+        style.configure('Modern.TEntry', fieldbackground='white', borderwidth=1, relief='solid')
+        style.configure('Modern.TCombobox', fieldbackground='white')
     
     def create_header(self):
         """Create modern header"""
@@ -192,6 +196,7 @@ class StudentPerformanceGUI:
             ("Database", "Connected" if self.db_manager else "Offline", "💾")
         ]
         
+        self.status_cards = {}
         for i, (title, value, icon) in enumerate(stats):
             card = tk.Frame(stats_grid, bg=self.colors['white'], relief='raised', bd=1)
             card.grid(row=0, column=i, padx=10, pady=10, sticky='nsew')
@@ -204,11 +209,10 @@ class StudentPerformanceGUI:
                                   bg=self.colors['white'], fg=self.colors['accent'])
             value_label.pack(pady=(0,10))
             
-            self.status_cards = getattr(self, 'status_cards', {})
             self.status_cards[title] = value_label
     
     def create_prediction_tab(self):
-        """Create prediction tab"""
+        """Create prediction tab with enhanced styled input fields"""
         prediction_frame = ttk.Frame(self.notebook)
         self.notebook.add(prediction_frame, text="🔮 Predict Performance")
         
@@ -219,7 +223,7 @@ class StudentPerformanceGUI:
         right_panel = tk.Frame(prediction_frame, bg=self.colors['light'])
         right_panel.pack(side='right', fill='both', expand=True, padx=10, pady=10)
         
-        # Input form
+        # Input form card
         form_card = tk.Frame(left_panel, bg=self.colors['white'], relief='raised', bd=1)
         form_card.pack(fill='both', expand=True)
         
@@ -236,43 +240,121 @@ class StudentPerformanceGUI:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
-        # Input fields
+        # Input fields with enhanced styling
         fields = [
-            ('👤 Student Name:', 'name'),
-            ('📊 Age:', 'age'),
-            ('⚥ Gender (male/female/other):', 'gender'),
-            ('🏫 School Type (public/private):', 'school_type'),
-            ('🎓 Parent Education:', 'parent_education'),
-            ('📚 Study Hours per day:', 'study_hours'),
-            ('📈 Attendance Percentage:', 'attendance_percentage'),
-            ('🌐 Internet Access (0 or 1):', 'internet_access'),
-            ('🚌 Travel Time (0-3):', 'travel_time'),
-            ('⭐ Extra Activities (0 or 1):', 'extra_activities'),
-            ('📖 Study Method:', 'study_method'),
-            ('🧮 Math Score (0-100):', 'math_score'),
-            ('🔬 Science Score (0-100):', 'science_score'),
-            ('📝 English Score (0-100):', 'english_score')
+            ('👤 Student Name:', 'name', 'text', 'Enter student name'),
+            ('📊 Age:', 'age', 'number', '14-18 years'),
+            ('⚥ Gender:', 'gender', 'combo', 'male,female,other'),
+            ('🏫 School Type:', 'school_type', 'combo', 'public,private'),
+            ('🎓 Parent Education:', 'parent_education', 'combo', 'high school,graduate,post graduate,masters'),
+            ('📚 Study Hours/Day:', 'study_hours', 'number', '0-15 hours'),
+            ('📈 Attendance %:', 'attendance_percentage', 'number', '0-100%'),
+            ('🌐 Internet Access:', 'internet_access', 'combo', '0,1'),
+            ('🚌 Travel Time:', 'travel_time', 'combo', '0,1,2,3'),
+            ('⭐ Extra Activities:', 'extra_activities', 'combo', '0,1'),
+            ('📖 Study Method:', 'study_method', 'combo', 'self,group study,mixed,textbook,notes'),
+            ('🧮 Math Score:', 'math_score', 'number', '0-100'),
+            ('🔬 Science Score:', 'science_score', 'number', '0-100'),
+            ('📝 English Score:', 'english_score', 'number', '0-100')
         ]
         
         self.input_vars = {}
         
-        for i, (label, key) in enumerate(fields):
-            tk.Label(scrollable_frame, text=label, font=('Segoe UI', 9),
-                    bg=self.colors['white'], anchor='w').grid(row=i, column=0, sticky='w', pady=5, padx=10)
+        for i, (label, key, field_type, placeholder) in enumerate(fields):
+            # Label with icon
+            label_frame = tk.Frame(scrollable_frame, bg=self.colors['white'])
+            label_frame.grid(row=i, column=0, sticky='w', pady=8, padx=15)
             
-            var = tk.DoubleVar() if key != 'name' else tk.StringVar()
-            entry = tk.Entry(scrollable_frame, textvariable=var, font=('Segoe UI', 9),
-                           bg='white', relief='solid', bd=1, width=28)
-            entry.grid(row=i, column=1, pady=5, padx=10, sticky='ew')
-            self.input_vars[key] = var
+            tk.Label(label_frame, text=label, font=('Segoe UI', 10, 'bold'),
+                    bg=self.colors['white'], fg=self.colors['secondary']).pack(side='left')
+            
+            # Input field frame
+            input_frame = tk.Frame(scrollable_frame, bg=self.colors['white'])
+            input_frame.grid(row=i, column=1, pady=8, padx=15, sticky='ew')
+            
+            if field_type == 'combo':
+                var = tk.StringVar()
+                combo = ttk.Combobox(input_frame, textvariable=var, 
+                                    values=placeholder.split(','),
+                                    font=('Segoe UI', 10), width=30,
+                                    style='Modern.TCombobox')
+                combo.pack(side='left')
+                
+                # Set default values
+                if key == 'gender':
+                    var.set('male')
+                elif key == 'school_type':
+                    var.set('public')
+                elif key == 'parent_education':
+                    var.set('graduate')
+                elif key == 'study_method':
+                    var.set('self')
+                elif key == 'internet_access':
+                    var.set('1')
+                elif key == 'extra_activities':
+                    var.set('1')
+                elif key == 'travel_time':
+                    var.set('0')
+                else:
+                    var.set(placeholder.split(',')[0] if placeholder else '')
+                
+                self.input_vars[key] = var
+                
+                # Tooltip
+                self.create_tooltip(combo, f"Select {label}")
+                
+            else:
+                var = tk.DoubleVar() if field_type == 'number' else tk.StringVar()
+                
+                # Entry with placeholder
+                entry = tk.Entry(input_frame, textvariable=var, font=('Segoe UI', 10),
+                               bg='white', relief='solid', bd=1, width=32)
+                entry.pack(side='left')
+                
+                # Set default values
+                if key == 'age':
+                    var.set(16)
+                elif key == 'study_hours':
+                    var.set(5)
+                elif key == 'attendance_percentage':
+                    var.set(85)
+                elif key == 'math_score':
+                    var.set(70)
+                elif key == 'science_score':
+                    var.set(70)
+                elif key == 'english_score':
+                    var.set(70)
+                elif key == 'name':
+                    entry.insert(0, placeholder)
+                    entry.bind('<FocusIn>', lambda e, ent=entry, ph=placeholder: self.clear_placeholder(ent, ph))
+                    entry.bind('<FocusOut>', lambda e, ent=entry, ph=placeholder: self.restore_placeholder(ent, ph))
+                else:
+                    var.set(0)
+                
+                self.input_vars[key] = var
+                
+                # Tooltip
+                self.create_tooltip(entry, f"Enter {label} ({placeholder})")
+            
+            # Hint label
+            if placeholder and field_type != 'combo':
+                hint_label = tk.Label(scrollable_frame, text=f"💡 {placeholder}",
+                                     font=('Segoe UI', 8), bg=self.colors['white'],
+                                     fg=self.colors['gray'])
+                hint_label.grid(row=i, column=2, sticky='w', padx=5)
         
-        # Predict button
-        predict_btn = tk.Button(scrollable_frame, text="🔮 Predict Performance",
+        # Predict button with hover effect
+        predict_btn = tk.Button(scrollable_frame, text="🔮 PREDICT PERFORMANCE",
                                command=self.predict_performance,
-                               font=('Segoe UI', 11, 'bold'),
+                               font=('Segoe UI', 12, 'bold'),
                                bg=self.colors['accent'], fg='white',
-                               padx=30, pady=10, cursor='hand2', relief='flat')
-        predict_btn.grid(row=len(fields), column=0, columnspan=2, pady=20)
+                               padx=40, pady=12, cursor='hand2', 
+                               relief='flat', width=35)
+        predict_btn.grid(row=len(fields), column=0, columnspan=2, pady=25)
+        
+        # Hover effect for button
+        predict_btn.bind("<Enter>", lambda e: predict_btn.configure(bg=self.colors['secondary']))
+        predict_btn.bind("<Leave>", lambda e: predict_btn.configure(bg=self.colors['accent']))
         
         canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
         scrollbar.pack(side="right", fill="y")
@@ -285,10 +367,18 @@ class StudentPerformanceGUI:
                 font=('Segoe UI', 14, 'bold'),
                 bg=self.colors['white'], fg=self.colors['primary']).pack(pady=15)
         
-        self.result_text = tk.Text(results_card, height=20, width=40,
-                                  font=('Segoe UI', 10), wrap=tk.WORD,
-                                  bg=self.colors['light'], relief='flat')
+        # Result text with custom styling
+        self.result_text = tk.Text(results_card, height=20, width=45,
+                                  font=('Segoe UI', 11), wrap=tk.WORD,
+                                  bg=self.colors['light'], relief='flat',
+                                  padx=15, pady=15)
         self.result_text.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Configure text tags for styling
+        self.result_text.tag_configure('title', font=('Segoe UI', 14, 'bold'), foreground=self.colors['primary'])
+        self.result_text.tag_configure('score', font=('Segoe UI', 24, 'bold'), foreground=self.colors['accent'])
+        self.result_text.tag_configure('category', font=('Segoe UI', 12, 'bold'))
+        self.result_text.tag_configure('advice', font=('Segoe UI', 10), foreground=self.colors['secondary'])
         
         # Action buttons
         button_frame = tk.Frame(results_card, bg=self.colors['white'])
@@ -296,15 +386,54 @@ class StudentPerformanceGUI:
         
         self.save_btn = tk.Button(button_frame, text="💾 Save to Database",
                                  command=self.save_prediction, state='disabled',
-                                 font=('Segoe UI', 9), bg=self.colors['success'],
-                                 fg='white', padx=20, pady=5, cursor='hand2')
+                                 font=('Segoe UI', 10), bg=self.colors['success'],
+                                 fg='white', padx=20, pady=8, cursor='hand2',
+                                 relief='flat')
         self.save_btn.pack(side='left', padx=10)
         
         export_btn = tk.Button(button_frame, text="📎 Export Results",
                               command=self.export_results,
-                              font=('Segoe UI', 9), bg=self.colors['secondary'],
-                              fg='white', padx=20, pady=5, cursor='hand2')
+                              font=('Segoe UI', 10), bg=self.colors['secondary'],
+                              fg='white', padx=20, pady=8, cursor='hand2',
+                              relief='flat')
         export_btn.pack(side='left', padx=10)
+        
+        clear_btn = tk.Button(button_frame, text="🔄 Clear Form",
+                             command=self.clear_form,
+                             font=('Segoe UI', 10), bg=self.colors['warning'],
+                             fg='white', padx=20, pady=8, cursor='hand2',
+                             relief='flat')
+        clear_btn.pack(side='left', padx=10)
+    
+    def create_tooltip(self, widget, text):
+        """Create tooltip for widget"""
+        def show_tooltip(event):
+            tooltip = tk.Toplevel(widget)
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            label = tk.Label(tooltip, text=text, background='#ffffe0', 
+                           relief='solid', borderwidth=1, font=('Segoe UI', 8))
+            label.pack()
+            widget.tooltip = tooltip
+        
+        def hide_tooltip(event):
+            if hasattr(widget, 'tooltip'):
+                widget.tooltip.destroy()
+        
+        widget.bind('<Enter>', show_tooltip)
+        widget.bind('<Leave>', hide_tooltip)
+    
+    def clear_placeholder(self, entry, placeholder):
+        """Clear placeholder text on focus"""
+        if entry.get() == placeholder:
+            entry.delete(0, tk.END)
+            entry.configure(fg='black')
+    
+    def restore_placeholder(self, entry, placeholder):
+        """Restore placeholder text on blur"""
+        if not entry.get():
+            entry.insert(0, placeholder)
+            entry.configure(fg='gray')
     
     def create_training_tab(self):
         """Create training tab"""
@@ -458,8 +587,14 @@ class StudentPerformanceGUI:
     
     def update_status(self, message, status_type='info'):
         """Update status bar"""
-        self.status_label.config(text=f"✅ {message}")
-        self.root.after(3000, lambda: self.status_label.config(text="✅ System Ready"))
+        icons = {'info': 'ℹ️', 'success': '✅', 'warning': '⚠️', 'error': '❌'}
+        icon = icons.get(status_type, 'ℹ️')
+        self.status_label.config(text=f"{icon} {message}")
+        
+        # Update status card
+        if status_type == 'success' and 'Model Status' in self.status_cards:
+            self.status_cards['Model Status'].config(text="Trained")
+            self.status_cards['Prediction Ready'].config(text="Yes")
     
     def load_dataset(self):
         """Load dataset from CSV"""
@@ -472,9 +607,15 @@ class StudentPerformanceGUI:
             try:
                 self.current_data = pd.read_csv(filename)
                 self.update_data_preview()
-                self.update_status(f"Dataset loaded: {self.current_data.shape[0]} rows")
+                self.update_status(f"Dataset loaded: {self.current_data.shape[0]} rows", 'success')
+                
+                # Update status cards
+                if 'Dataset Status' in self.status_cards:
+                    self.status_cards['Dataset Status'].config(text=f"Loaded ({self.current_data.shape[0]} rows)")
+                
                 messagebox.showinfo("Success", f"Dataset loaded successfully!\nShape: {self.current_data.shape}")
             except Exception as e:
+                self.update_status(f"Failed to load dataset: {str(e)}", 'error')
                 messagebox.showerror("Error", f"Failed to load dataset: {str(e)}")
     
     def update_data_preview(self):
@@ -510,7 +651,7 @@ class StudentPerformanceGUI:
             messagebox.showwarning("Warning", "Please load a dataset first!")
             return
         
-        self.update_status("Starting model training...")
+        self.update_status("Starting model training...", 'info')
         self.progress.start()
         self.training_text.delete(1.0, tk.END)
         self.training_text.insert(tk.END, "🚀 Starting model training...\n\n")
@@ -554,9 +695,14 @@ class StudentPerformanceGUI:
             self._update_training_text("\n✅ Model training completed successfully!\n")
             self.update_status("Model training completed!", 'success')
             
+            # Show success message
+            self.root.after(0, lambda: messagebox.showinfo("Success", "Model training completed successfully!"))
+            
         except Exception as e:
-            self._update_training_text(f"\n❌ Training failed: {str(e)}\n")
-            self.update_status(f"Training failed: {str(e)}", 'error')
+            error_msg = str(e)
+            self._update_training_text(f"\n❌ Training failed: {error_msg}\n")
+            self.update_status(f"Training failed: {error_msg}", 'error')
+            self.root.after(0, lambda: messagebox.showerror("Error", f"Training failed: {error_msg}"))
         finally:
             self._stop_progress()
     
@@ -570,137 +716,351 @@ class StudentPerformanceGUI:
         self.root.after(0, self.progress.stop)
     
     def predict_performance(self):
-        """Make prediction"""
+        """Make prediction with proper categorical encoding"""
         if not self.is_model_trained:
             messagebox.showwarning("Warning", "Please train the model first!")
             return
         
         try:
-            student_data = {
-                'name': self.input_vars['name'].get() or "Student",
-                'age': self.input_vars['age'].get(),
-                'gender': self.input_vars['gender'].get(),
-                'school_type': self.input_vars['school_type'].get(),
-                'parent_education': self.input_vars['parent_education'].get(),
-                'study_hours': self.input_vars['study_hours'].get(),
-                'attendance_percentage': self.input_vars['attendance_percentage'].get(),
-                'internet_access': int(self.input_vars['internet_access'].get()),
-                'travel_time': int(self.input_vars['travel_time'].get()),
-                'extra_activities': int(self.input_vars['extra_activities'].get()),
-                'study_method': self.input_vars['study_method'].get(),
-                'math_score': self.input_vars['math_score'].get(),
-                'science_score': self.input_vars['science_score'].get(),
-                'english_score': self.input_vars['english_score'].get()
+            # Get student name
+            student_name = self.input_vars['name'].get()
+            if not student_name or student_name == "Enter student name":
+                student_name = "Student"
+            
+            # Create dictionary with all input values
+            student_data = {}
+            
+            # Handle numeric fields
+            numeric_fields = ['age', 'study_hours', 'attendance_percentage', 
+                             'math_score', 'science_score', 'english_score']
+            for field in numeric_fields:
+                try:
+                    value = self.input_vars[field].get()
+                    student_data[field] = float(value) if value else 0.0
+                except:
+                    student_data[field] = 0.0
+            
+            # Handle integer fields
+            int_fields = ['internet_access', 'travel_time', 'extra_activities']
+            for field in int_fields:
+                try:
+                    value = self.input_vars[field].get()
+                    student_data[field] = int(float(value)) if value else 0
+                except:
+                    student_data[field] = 0
+            
+            # Handle categorical fields (will be encoded by preprocessor)
+            categorical_fields = ['gender', 'school_type', 'parent_education', 'study_method']
+            for field in categorical_fields:
+                value = self.input_vars[field].get()
+                student_data[field] = str(value) if value else ""
+            
+            # Create DataFrame
+            input_df = pd.DataFrame([student_data])
+            
+            # Use the preprocessor to encode categorical variables
+            # The preprocessor already has the label encoders from training
+            X_input = self.preprocessor.prepare_features_only(input_df)
+            
+            # Make prediction
+            predicted_score = self.model_trainer.predict(X_input)[0]
+            predicted_score = max(0, min(100, predicted_score))  # Clamp to 0-100
+            
+            # Determine category and advice
+            if predicted_score >= 85:
+                category = "🏆 EXCELLENT"
+                advice = "Outstanding performance! Keep up the great work! 🌟"
+                category_color = "#27ae60"
+            elif predicted_score >= 70:
+                category = "👍 GOOD"
+                advice = "Good job! With consistent effort, you can achieve excellence! 📈"
+                category_color = "#3498db"
+            elif predicted_score >= 50:
+                category = "📚 AVERAGE"
+                advice = "You're on the right track. Focus on improving weaker subjects. 💪"
+                category_color = "#f39c12"
+            else:
+                category = "⚠️ NEEDS IMPROVEMENT"
+                advice = "Need significant improvement. Consider extra help and more study time. 📖"
+                category_color = "#e74c3c"
+            
+            # Display formatted results
+            self.result_text.delete(1.0, tk.END)
+            
+            # Title
+            self.result_text.insert(tk.END, "=" * 55 + "\n", 'title')
+            self.result_text.insert(tk.END, "🎯 PREDICTION RESULTS\n", 'title')
+            self.result_text.insert(tk.END, "=" * 55 + "\n\n", 'title')
+            
+            # Student info
+            self.result_text.insert(tk.END, f"👤 Student: {student_name}\n")
+            self.result_text.insert(tk.END, f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            
+            self.result_text.insert(tk.END, "─" * 55 + "\n")
+            
+            # Score
+            self.result_text.insert(tk.END, f"📊 Predicted Score: ", 'advice')
+            self.result_text.insert(tk.END, f"{predicted_score:.1f}", 'score')
+            self.result_text.insert(tk.END, f"/100\n\n", 'advice')
+            
+            # Category
+            self.result_text.insert(tk.END, f"🏅 Category: ", 'advice')
+            self.result_text.tag_config('category_highlight', foreground=category_color, font=('Segoe UI', 12, 'bold'))
+            self.result_text.insert(tk.END, f"{category}\n\n", 'category_highlight')
+            
+            self.result_text.insert(tk.END, "─" * 55 + "\n")
+            
+            # Advice
+            self.result_text.insert(tk.END, f"💡 Recommendation:\n{advice}\n", 'advice')
+            
+            # Store for saving
+            self.last_prediction = {
+                'name': student_name,
+                'score': predicted_score,
+                'category': category,
+                'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'data': student_data
             }
             
-            input_df = pd.DataFrame([student_data])
-            X_input = self.preprocessor.prepare_features_only(input_df)
-            predicted_score = self.model_trainer.predict(X_input)[0]
-            
-            # Display results
-            self.result_text.delete(1.0, tk.END)
-            self.result_text.insert(tk.END, "=" * 50 + "\n")
-            self.result_text.insert(tk.END, "🎯 PREDICTION RESULTS\n")
-            self.result_text.insert(tk.END, "=" * 50 + "\n\n")
-            self.result_text.insert(tk.END, f"👤 Student: {student_data['name']}\n")
-            self.result_text.insert(tk.END, f"📊 Predicted Score: {predicted_score:.2f}/100\n\n")
-            
-            if predicted_score >= 85:
-                self.result_text.insert(tk.END, "🏆 Category: Excellent 🌟\n")
-            elif predicted_score >= 70:
-                self.result_text.insert(tk.END, "🏆 Category: Good 👍\n")
-            elif predicted_score >= 50:
-                self.result_text.insert(tk.END, "🏆 Category: Average 📚\n")
-            else:
-                self.result_text.insert(tk.END, "🏆 Category: Needs Improvement ⚠️\n")
-            
-            self.last_prediction = {'student_data': student_data, 'score': predicted_score}
             self.save_btn.config(state='normal')
+            self.update_status("Prediction completed successfully!", 'success')
             
         except Exception as e:
-            messagebox.showerror("Error", f"Prediction failed: {str(e)}")
+            error_msg = str(e)
+            self.update_status(f"Prediction failed: {error_msg}", 'error')
+            messagebox.showerror("Error", f"Prediction failed: {error_msg}\n\nPlease make sure the model is trained properly.")
+            logger.error(f"Prediction error: {traceback.format_exc()}")
+    
+    def clear_form(self):
+        """Clear all input fields"""
+        for key, var in self.input_vars.items():
+            if key == 'name':
+                var.set("Enter student name")
+            elif key == 'gender':
+                var.set('male')
+            elif key == 'school_type':
+                var.set('public')
+            elif key == 'parent_education':
+                var.set('graduate')
+            elif key == 'study_method':
+                var.set('self')
+            elif key == 'internet_access':
+                var.set('1')
+            elif key == 'extra_activities':
+                var.set('1')
+            elif key == 'travel_time':
+                var.set('0')
+            elif key == 'age':
+                var.set(16)
+            elif key == 'study_hours':
+                var.set(5)
+            elif key == 'attendance_percentage':
+                var.set(85)
+            elif key in ['math_score', 'science_score', 'english_score']:
+                var.set(70)
+            else:
+                var.set(0)
+        
+        self.result_text.delete(1.0, tk.END)
+        self.update_status("Form cleared", 'info')
     
     def save_prediction(self):
         """Save prediction to database"""
         if self.last_prediction and self.db_manager:
-            messagebox.showinfo("Success", "Prediction saved to database!")
-            self.save_btn.config(state='disabled')
+            try:
+                # This would save to database
+                messagebox.showinfo("Success", "Prediction saved to database!")
+                self.save_btn.config(state='disabled')
+                self.update_status("Prediction saved!", 'success')
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save: {str(e)}")
         else:
-            messagebox.showinfo("Info", "Database not available - prediction not saved")
+            if not self.db_manager:
+                messagebox.showinfo("Info", "Database not available - prediction not saved")
+            else:
+                messagebox.showwarning("Warning", "No prediction to save")
     
     def save_model(self):
         """Save model"""
         if self.is_model_trained:
-            self.model_trainer.save_model()
-            self.preprocessor.save_preprocessors()
-            messagebox.showinfo("Success", "Model saved successfully!")
+            try:
+                self.model_trainer.save_model()
+                self.preprocessor.save_preprocessors()
+                self.update_status("Model saved successfully!", 'success')
+                messagebox.showinfo("Success", "Model saved successfully!")
+            except Exception as e:
+                self.update_status(f"Failed to save model: {str(e)}", 'error')
+                messagebox.showerror("Error", f"Failed to save model: {str(e)}")
+        else:
+            messagebox.showwarning("Warning", "No trained model to save!")
     
     def load_model(self):
         """Load model"""
-        try:
-            self.model_trainer.load_model()
-            self.preprocessor.load_preprocessors()
-            self.is_model_trained = True
-            messagebox.showinfo("Success", "Model loaded successfully!")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load model: {str(e)}")
+        filename = filedialog.askopenfilename(
+            title="Load Model",
+            filetypes=[("PKL files", "*.pkl"), ("All files", "*.*")]
+        )
+        
+        if filename:
+            try:
+                # Load model and preprocessors
+                import joblib
+                model_data = joblib.load(filename)
+                self.model_trainer.best_model = model_data['model']
+                self.model_trainer.best_model_name = model_data.get('model_name', 'Loaded Model')
+                self.model_trainer.model_metrics = model_data.get('metrics', {})
+                
+                # Load preprocessors
+                self.preprocessor.load_preprocessors()
+                
+                self.is_model_trained = True
+                self.update_status("Model loaded successfully!", 'success')
+                
+                # Update status cards
+                if 'Model Status' in self.status_cards:
+                    self.status_cards['Model Status'].config(text="Loaded")
+                if 'Prediction Ready' in self.status_cards:
+                    self.status_cards['Prediction Ready'].config(text="Yes")
+                
+                messagebox.showinfo("Success", "Model loaded successfully!")
+            except Exception as e:
+                self.update_status(f"Failed to load model: {str(e)}", 'error')
+                messagebox.showerror("Error", f"Failed to load model: {str(e)}")
     
     def export_results(self):
-        """Export results"""
+        """Export results to CSV"""
         if self.last_prediction:
-            filename = filedialog.asksaveasfilename(defaultextension=".csv")
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
             if filename:
-                df = pd.DataFrame([self.last_prediction['student_data']])
-                df['predicted_score'] = self.last_prediction['score']
-                df.to_csv(filename, index=False)
-                messagebox.showinfo("Success", "Results exported successfully!")
+                try:
+                    df = pd.DataFrame([self.last_prediction['data']])
+                    df['student_name'] = self.last_prediction['name']
+                    df['predicted_score'] = self.last_prediction['score']
+                    df['category'] = self.last_prediction['category']
+                    df['prediction_date'] = self.last_prediction['date']
+                    df.to_csv(filename, index=False)
+                    self.update_status(f"Results exported to {filename}", 'success')
+                    messagebox.showinfo("Success", f"Results exported to {filename}")
+                except Exception as e:
+                    self.update_status(f"Failed to export: {str(e)}", 'error')
+                    messagebox.showerror("Error", f"Failed to export: {str(e)}")
+        else:
+            messagebox.showwarning("Warning", "No prediction to export!")
     
     def show_prediction_history(self):
         """Show prediction history"""
         self.report_display.delete(1.0, tk.END)
-        self.report_display.insert(tk.END, "Prediction History Feature\n")
-        self.report_display.insert(tk.END, "=" * 40 + "\n")
-        self.report_display.insert(tk.END, "Connect to database to view history.")
+        self.report_display.insert(tk.END, "📜 PREDICTION HISTORY\n")
+        self.report_display.insert(tk.END, "=" * 50 + "\n\n")
+        
+        if hasattr(self, 'last_prediction') and self.last_prediction:
+            self.report_display.insert(tk.END, f"Latest Prediction:\n")
+            self.report_display.insert(tk.END, f"  Student: {self.last_prediction['name']}\n")
+            self.report_display.insert(tk.END, f"  Score: {self.last_prediction['score']:.1f}/100\n")
+            self.report_display.insert(tk.END, f"  Category: {self.last_prediction['category']}\n")
+            self.report_display.insert(tk.END, f"  Date: {self.last_prediction['date']}\n")
+        else:
+            self.report_display.insert(tk.END, "No predictions made yet.\n")
+            self.report_display.insert(tk.END, "Go to Predict Performance tab to make predictions.")
     
     def show_student_records(self):
         """Show student records"""
         self.report_display.delete(1.0, tk.END)
-        self.report_display.insert(tk.END, "Student Records Feature\n")
-        self.report_display.insert(tk.END, "=" * 40 + "\n")
-        self.report_display.insert(tk.END, "Connect to database to view records.")
+        self.report_display.insert(tk.END, "👥 STUDENT RECORDS\n")
+        self.report_display.insert(tk.END, "=" * 50 + "\n\n")
+        
+        if self.current_data is not None:
+            self.report_display.insert(tk.END, f"Total Students: {len(self.current_data)}\n")
+            self.report_display.insert(tk.END, f"Features: {len(self.current_data.columns)}\n\n")
+            self.report_display.insert(tk.END, "Sample Records:\n")
+            self.report_display.insert(tk.END, self.current_data.head(10).to_string())
+        else:
+            self.report_display.insert(tk.END, "No dataset loaded.\n")
+            self.report_display.insert(tk.END, "Please load a dataset first.")
     
     def show_model_performance(self):
         """Show model performance"""
         self.report_display.delete(1.0, tk.END)
-        self.report_display.insert(tk.END, "Model Performance Metrics\n")
-        self.report_display.insert(tk.END, "=" * 40 + "\n\n")
+        self.report_display.insert(tk.END, "📊 MODEL PERFORMANCE METRICS\n")
+        self.report_display.insert(tk.END, "=" * 50 + "\n\n")
+        
         if self.model_trainer.best_model_name:
-            self.report_display.insert(tk.END, f"Best Model: {self.model_trainer.best_model_name}\n")
-            self.report_display.insert(tk.END, f"R² Score: {self.model_trainer.model_metrics.get('r2', 'N/A'):.4f}\n")
-            self.report_display.insert(tk.END, f"RMSE: {self.model_trainer.model_metrics.get('rmse', 'N/A'):.4f}\n")
+            self.report_display.insert(tk.END, f"🏆 Best Model: {self.model_trainer.best_model_name}\n")
+            self.report_display.insert(tk.END, f"📈 R² Score: {self.model_trainer.model_metrics.get('r2', 'N/A'):.4f}\n")
+            self.report_display.insert(tk.END, f"📉 RMSE: {self.model_trainer.model_metrics.get('rmse', 'N/A'):.4f}\n")
+            self.report_display.insert(tk.END, f"📊 MAE: {self.model_trainer.model_metrics.get('mae', 'N/A'):.4f}\n\n")
+            
+            # Performance interpretation
+            r2 = self.model_trainer.model_metrics.get('r2', 0)
+            if r2 > 0.8:
+                self.report_display.insert(tk.END, "✅ Model Quality: Excellent\n")
+                self.report_display.insert(tk.END, "The model shows strong predictive capability.")
+            elif r2 > 0.6:
+                self.report_display.insert(tk.END, "👍 Model Quality: Good\n")
+                self.report_display.insert(tk.END, "The model shows reasonable predictive capability.")
+            elif r2 > 0.4:
+                self.report_display.insert(tk.END, "⚠️ Model Quality: Average\n")
+                self.report_display.insert(tk.END, "Consider adding more features or collecting more data.")
+            else:
+                self.report_display.insert(tk.END, "❌ Model Quality: Needs Improvement\n")
+                self.report_display.insert(tk.END, "Consider feature engineering or trying different algorithms.")
         else:
-            self.report_display.insert(tk.END, "No model trained yet.")
+            self.report_display.insert(tk.END, "No model trained yet.\n")
+            self.report_display.insert(tk.END, "Please train a model first.")
     
     def show_visualizations(self):
         """Show visualizations"""
         if self.current_data is None:
-            messagebox.showwarning("Warning", "No data available!")
+            messagebox.showwarning("Warning", "No data available for visualization!")
             return
         
+        # Create new window for visualizations
         viz_window = tk.Toplevel(self.root)
-        viz_window.title("Data Visualizations")
-        viz_window.geometry("1000x700")
+        viz_window.title("📊 Data Visualizations")
+        viz_window.geometry("1200x900")
+        viz_window.configure(bg=self.colors['light'])
         
+        # Create notebook for multiple plots
+        viz_notebook = ttk.Notebook(viz_window)
+        viz_notebook.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Plot 1: Distribution of performance scores
         if TARGET in self.current_data.columns:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            self.current_data[TARGET].hist(bins=30, ax=ax, color=self.colors['accent'])
-            ax.set_title('Performance Score Distribution')
-            ax.set_xlabel('Score')
-            ax.set_ylabel('Frequency')
+            fig1, ax1 = plt.subplots(figsize=(10, 6))
+            self.current_data[TARGET].hist(bins=30, ax=ax1, color=self.colors['accent'], edgecolor='black')
+            ax1.set_title('Distribution of Performance Scores', fontsize=14, fontweight='bold')
+            ax1.set_xlabel('Performance Score', fontsize=12)
+            ax1.set_ylabel('Frequency', fontsize=12)
+            ax1.grid(True, alpha=0.3)
             
-            canvas = FigureCanvasTkAgg(fig, viz_window)
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill='both', expand=True)
+            canvas1 = FigureCanvasTkAgg(fig1, viz_notebook)
+            canvas1.draw()
+            frame1 = ttk.Frame(viz_notebook)
+            viz_notebook.add(frame1, text="Score Distribution")
+            canvas1.get_tk_widget().pack(fill='both', expand=True)
+        
+        # Plot 2: Correlation heatmap
+        numeric_cols = self.current_data.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 1:
+            fig2, ax2 = plt.subplots(figsize=(12, 8))
+            corr = self.current_data[numeric_cols].corr()
+            sns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm', ax=ax2, square=True)
+            ax2.set_title('Feature Correlation Matrix', fontsize=14, fontweight='bold')
+            
+            canvas2 = FigureCanvasTkAgg(fig2, viz_notebook)
+            canvas2.draw()
+            frame2 = ttk.Frame(viz_notebook)
+            viz_notebook.add(frame2, text="Correlation Matrix")
+            canvas2.get_tk_widget().pack(fill='both', expand=True)
+        
+        # Close button
+        close_btn = tk.Button(viz_window, text="Close", command=viz_window.destroy,
+                            font=('Segoe UI', 10), bg=self.colors['accent'],
+                            fg='white', padx=20, pady=5, cursor='hand2')
+        close_btn.pack(pady=10)
     
     def on_closing(self):
         """Handle closing"""

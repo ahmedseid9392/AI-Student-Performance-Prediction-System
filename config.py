@@ -10,9 +10,10 @@ DB_CONFIG = {
     'database': 'student_performance_db'
 }
 
-# Model Configuration
+# Model Configuration - 70% Train, 30% Test
 MODEL_CONFIG = {
-    'test_size': 0.2,
+    'test_size': 0.3,  # 30% for testing
+    'train_size': 0.7,  # 70% for training
     'random_state': 42,
     'cv_folds': 5
 }
@@ -39,7 +40,7 @@ FEATURES = [
 ]
 
 # Target Column - Use 'overall_score' for regression (numeric prediction)
-TARGET = 'overall_score'  # or use 'final_grade' for classification
+TARGET = 'overall_score'
 
 # Performance Categories for scoring
 PERFORMANCE_CATEGORIES = {
@@ -47,16 +48,6 @@ PERFORMANCE_CATEGORIES = {
     'Good': (70, 84),
     'Average': (50, 69),
     'Poor': (0, 49)
-}
-
-# Alternative: If you want to use letter grades instead
-GRADE_CATEGORIES = {
-    'A': (90, 100),
-    'B': (80, 89),
-    'C': (70, 79),
-    'D': (60, 69),
-    'E': (50, 59),
-    'F': (0, 49)
 }
 
 # Field validation ranges

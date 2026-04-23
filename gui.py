@@ -63,8 +63,6 @@ class StudentPerformanceGUI:
     def setup_styles(self):
         """Setup modern professional styles"""
         style = ttk.Style()
-        
-        # Set theme
         style.theme_use('clam')
         
         # Color scheme
@@ -260,17 +258,17 @@ class StudentPerformanceGUI:
                     values = ['public', 'private']
                     var.set('public')
                 elif key == 'parent_education':
-                    values = ['high school','phd', 'graduate','diploma', 'post graduate', 'masters' ,'no formal']
+                    values = ['high school', 'phd', 'graduate', 'diploma', 'post graduate', 'masters', 'no formal']
                     var.set('graduate')
                 elif key == 'study_method':
-                    values = ['textbook', 'group study','coaching','mixed', 'online videos','notes']
+                    values = ['textbook', 'group study', 'coaching', 'mixed', 'online videos', 'notes']
                     var.set('textbook')
                 elif key in ['internet_access', 'extra_activities']:
                     values = ['0', '1']
                     var.set('1')
                 elif key == 'travel_time':
-                    values = ['0', '1', '2', '3']
-                    var.set('0')
+                    values = ['<15 min', '15-30 min', '30-60 min', '>60 min']
+                    var.set('<15 min')
                 else:
                     values = []
                 
@@ -725,89 +723,320 @@ class StudentPerformanceGUI:
         self.root.after(0, self.progress.stop)
     
     def predict_performance(self):
-        """Make prediction"""
+        """Make prediction with detailed property analysis and improvement suggestions"""
         if not self.is_model_trained:
             messagebox.showwarning("Warning", "Please train the model first!")
             return
         
         try:
-            student_data = {
-                'name': self.input_vars['name'].get(),
-                'age': self.input_vars['age'].get(),
-                'gender': self.input_vars['gender'].get(),
-                'school_type': self.input_vars['school_type'].get(),
-                'parent_education': self.input_vars['parent_education'].get(),
-                'study_hours': self.input_vars['study_hours'].get(),
-                'attendance_percentage': self.input_vars['attendance_percentage'].get(),
-                'internet_access': int(float(self.input_vars['internet_access'].get())),
-                'travel_time': int(float(self.input_vars['travel_time'].get())),
-                'extra_activities': int(float(self.input_vars['extra_activities'].get())),
-                'study_method': self.input_vars['study_method'].get(),
-                'math_score': self.input_vars['math_score'].get(),
-                'science_score': self.input_vars['science_score'].get(),
-                'english_score': self.input_vars['english_score'].get()
-            }
+            # Get student name
+            student_name = self.input_vars['name'].get()
+            if not student_name or student_name == "Enter student name":
+                student_name = "Student"
             
+            # Create dictionary with all input values
+            student_data = {}
+            
+            # Handle numeric fields
+            student_data['age'] = float(self.input_vars['age'].get()) if self.input_vars['age'].get() else 16
+            student_data['study_hours'] = float(self.input_vars['study_hours'].get()) if self.input_vars['study_hours'].get() else 5
+            student_data['attendance_percentage'] = float(self.input_vars['attendance_percentage'].get()) if self.input_vars['attendance_percentage'].get() else 85
+            student_data['math_score'] = float(self.input_vars['math_score'].get()) if self.input_vars['math_score'].get() else 70
+            student_data['science_score'] = float(self.input_vars['science_score'].get()) if self.input_vars['science_score'].get() else 70
+            student_data['english_score'] = float(self.input_vars['english_score'].get()) if self.input_vars['english_score'].get() else 70
+            
+            # Handle integer fields
+            student_data['internet_access'] = int(float(self.input_vars['internet_access'].get())) if self.input_vars['internet_access'].get() else 1
+            student_data['extra_activities'] = int(float(self.input_vars['extra_activities'].get())) if self.input_vars['extra_activities'].get() else 1
+            
+            # Handle travel_time mapping
+            travel_time_value = self.input_vars['travel_time'].get()
+            travel_time_map = {
+                '<15 min': 0,
+                '15-30 min': 1,
+                '30-60 min': 2,
+                '>60 min': 3
+            }
+            student_data['travel_time'] = travel_time_map.get(travel_time_value, 0)
+            
+            # Handle categorical fields
+            student_data['gender'] = self.input_vars['gender'].get() if self.input_vars['gender'].get() else "male"
+            student_data['school_type'] = self.input_vars['school_type'].get() if self.input_vars['school_type'].get() else "public"
+            student_data['parent_education'] = self.input_vars['parent_education'].get() if self.input_vars['parent_education'].get() else "graduate"
+            student_data['study_method'] = self.input_vars['study_method'].get() if self.input_vars['study_method'].get() else "textbook"
+            
+            # Extract values for analysis
+            math_score = student_data['math_score']
+            science_score = student_data['science_score']
+            english_score = student_data['english_score']
+            study_hours = student_data['study_hours']
+            attendance = student_data['attendance_percentage']
+            travel_time_val = student_data['travel_time']
+            extra_activities = student_data['extra_activities']
+            internet_access = student_data['internet_access']
+            
+            # Create DataFrame for prediction
             input_df = pd.DataFrame([student_data])
+            
+            # Use the preprocessor to encode categorical variables
             X_input = self.preprocessor.prepare_features_only(input_df)
+            
+            # Make prediction
             predicted_score = self.model_trainer.predict(X_input)[0]
             predicted_score = max(0, min(100, predicted_score))
             
-            self.result_text.delete(1.0, tk.END)
-            self.result_text.insert(tk.END, "=" * 50 + "\n")
-            self.result_text.insert(tk.END, "🎯 PREDICTION RESULTS\n")
-            self.result_text.insert(tk.END, "=" * 50 + "\n\n")
-            self.result_text.insert(tk.END, f"👤 Student: {student_data['name']}\n")
-            self.result_text.insert(tk.END, f"📊 Predicted Score: {predicted_score:.2f}/100\n\n")
+            # Travel time text mapping
+            travel_time_text = {
+                0: "Less than 15 minutes",
+                1: "15-30 minutes",
+                2: "30-60 minutes",
+                3: "More than 60 minutes"
+            }.get(travel_time_val, "Unknown")
             
+            # Determine overall category
             if predicted_score >= 85:
-                self.result_text.insert(tk.END, "🏆 Category: EXCELLENT 🌟\n")
-                self.result_text.insert(tk.END, "💡 Keep up the great work!\n")
+                overall_category = "EXCELLENT"
+                overall_icon = "🌟"
+                overall_color = "#27ae60"
             elif predicted_score >= 70:
-                self.result_text.insert(tk.END, "🏆 Category: GOOD 👍\n")
-                self.result_text.insert(tk.END, "💡 Good job! Aim for excellence!\n")
+                overall_category = "GOOD"
+                overall_icon = "👍"
+                overall_color = "#3498db"
             elif predicted_score >= 50:
-                self.result_text.insert(tk.END, "🏆 Category: AVERAGE 📚\n")
-                self.result_text.insert(tk.END, "💡 Focus on improving weaker areas.\n")
+                overall_category = "AVERAGE"
+                overall_icon = "📚"
+                overall_color = "#f39c12"
             else:
-                self.result_text.insert(tk.END, "🏆 Category: NEEDS IMPROVEMENT ⚠️\n")
-                self.result_text.insert(tk.END, "💡 Seek help and increase study time.\n")
+                overall_category = "NEEDS IMPROVEMENT"
+                overall_icon = "⚠️"
+                overall_color = "#e74c3c"
             
-            self.last_prediction = student_data
+            # Analyze strengths and weaknesses
+            strengths = []
+            weaknesses = []
+            
+            # Subject analysis
+            if math_score >= 75:
+                strengths.append(f"📐 Mathematics: {math_score:.0f}/100 - Strong performance!")
+            elif math_score >= 60:
+                strengths.append(f"📐 Mathematics: {math_score:.0f}/100 - Satisfactory")
+            else:
+                weaknesses.append(f"📐 Mathematics: {math_score:.0f}/100 - Needs significant improvement")
+            
+            if science_score >= 75:
+                strengths.append(f"🔬 Science: {science_score:.0f}/100 - Strong performance!")
+            elif science_score >= 60:
+                strengths.append(f"🔬 Science: {science_score:.0f}/100 - Satisfactory")
+            else:
+                weaknesses.append(f"🔬 Science: {science_score:.0f}/100 - Needs significant improvement")
+            
+            if english_score >= 75:
+                strengths.append(f"📝 English: {english_score:.0f}/100 - Strong performance!")
+            elif english_score >= 60:
+                strengths.append(f"📝 English: {english_score:.0f}/100 - Satisfactory")
+            else:
+                weaknesses.append(f"📝 English: {english_score:.0f}/100 - Needs significant improvement")
+            
+            # Study habits analysis
+            if study_hours >= 6:
+                strengths.append(f"📚 Study Hours: {study_hours:.1f} hours/day - Excellent dedication!")
+            elif study_hours >= 4:
+                strengths.append(f"📚 Study Hours: {study_hours:.1f} hours/day - Good consistency")
+            else:
+                weaknesses.append(f"📚 Study Hours: {study_hours:.1f} hours/day - Below recommended (aim for 5-6 hours)")
+            
+            # Attendance analysis
+            if attendance >= 90:
+                strengths.append(f"📈 Attendance: {attendance:.0f}% - Outstanding!")
+            elif attendance >= 75:
+                strengths.append(f"📈 Attendance: {attendance:.0f}% - Good")
+            else:
+                weaknesses.append(f"📈 Attendance: {attendance:.0f}% - Low attendance affects learning")
+            
+            # Travel time analysis
+            if travel_time_val <= 1:
+                strengths.append(f"🚌 Travel Time: {travel_time_text} - Convenient")
+            elif travel_time_val == 2:
+                weaknesses.append(f"🚌 Travel Time: {travel_time_text} - Consider using travel time for review")
+            else:
+                weaknesses.append(f"🚌 Travel Time: {travel_time_text} - Long commute may affect study time")
+            
+            # Extra activities
+            if extra_activities == 1:
+                strengths.append(f"⭐ Extra Activities: Participating - Good for holistic development")
+            else:
+                weaknesses.append(f"⭐ Extra Activities: Not participating - Consider joining activities")
+            
+            # Internet access
+            if internet_access == 1:
+                strengths.append(f"🌐 Internet Access: Available - Good for online learning resources")
+            else:
+                weaknesses.append(f"🌐 Internet Access: Limited - Consider library resources")
+            
+            # Generate improvement suggestions
+            improvement_tips = []
+            
+            if predicted_score < 70:
+                improvement_tips.append("🎯 Set daily study goals and track progress")
+            
+            if math_score < 60:
+                improvement_tips.append("📐 Math: Practice daily, focus on weak topics, use online tutorials")
+            
+            if science_score < 60:
+                improvement_tips.append("🔬 Science: Create concept maps, watch educational videos, join study groups")
+            
+            if english_score < 60:
+                improvement_tips.append("📝 English: Read regularly, practice writing, expand vocabulary")
+            
+            if study_hours < 5:
+                improvement_tips.append("⏰ Increase study time gradually - aim for 5-6 hours daily")
+            
+            if attendance < 80:
+                improvement_tips.append("📅 Improve attendance - regular classes are crucial for success")
+            
+            if travel_time_val >= 2:
+                improvement_tips.append("🎧 Use travel time productively - listen to educational podcasts")
+            
+            if extra_activities == 0:
+                improvement_tips.append("🤝 Join extracurricular activities to develop soft skills")
+            
+            # Clear and display results
+            self.result_text.delete(1.0, tk.END)
+            
+            # Configure text tags
+            self.result_text.tag_configure('title', font=('Segoe UI', 16, 'bold'), foreground=self.colors['primary'])
+            self.result_text.tag_configure('header', font=('Segoe UI', 12, 'bold'), foreground=self.colors['secondary'])
+            self.result_text.tag_configure('score_big', font=('Segoe UI', 28, 'bold'), foreground=self.colors['accent'])
+            self.result_text.tag_configure('category', font=('Segoe UI', 14, 'bold'), foreground=overall_color)
+            self.result_text.tag_configure('strength', font=('Segoe UI', 10), foreground=self.colors['success'])
+            self.result_text.tag_configure('weakness', font=('Segoe UI', 10), foreground=self.colors['danger'])
+            self.result_text.tag_configure('tip', font=('Segoe UI', 10), foreground=self.colors['secondary'])
+            self.result_text.tag_configure('divider', font=('Segoe UI', 10), foreground=self.colors['gray'])
+            
+            # Title
+            self.result_text.insert(tk.END, "=" * 60 + "\n", 'divider')
+            self.result_text.insert(tk.END, "🎓 STUDENT PERFORMANCE ANALYSIS\n", 'title')
+            self.result_text.insert(tk.END, "=" * 60 + "\n\n", 'divider')
+            
+            # Student info
+            self.result_text.insert(tk.END, f"👤 Student: {student_name}\n")
+            self.result_text.insert(tk.END, f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            
+            # Predicted Score
+            self.result_text.insert(tk.END, "─" * 60 + "\n", 'divider')
+            self.result_text.insert(tk.END, f"🎯 PREDICTED OVERALL SCORE\n", 'header')
+            self.result_text.insert(tk.END, f"{predicted_score:.1f}", 'score_big')
+            self.result_text.insert(tk.END, f"/100\n\n", 'header')
+            self.result_text.insert(tk.END, f"📊 Category: {overall_icon} {overall_category}\n", 'category')
+            self.result_text.insert(tk.END, "─" * 60 + "\n\n", 'divider')
+            
+            # Subject-wise breakdown
+            self.result_text.insert(tk.END, f"📋 SUBJECT-WISE BREAKDOWN\n", 'header')
+            self.result_text.insert(tk.END, "─" * 40 + "\n", 'divider')
+            
+            subjects = [
+                ("Mathematics", math_score, "📐"),
+                ("Science", science_score, "🔬"),
+                ("English", english_score, "📝")
+            ]
+            
+            for subj_name, subj_score, icon in subjects:
+                self.result_text.insert(tk.END, f"{icon} {subj_name}: {subj_score:.0f}/100")
+                bar_length = int(subj_score / 10)
+                bar = "█" * bar_length + "░" * (10 - bar_length)
+                self.result_text.insert(tk.END, f" [{bar}]\n")
+            
+            self.result_text.insert(tk.END, "\n")
+            
+            # Study habits
+            self.result_text.insert(tk.END, f"📚 STUDY HABITS\n", 'header')
+            self.result_text.insert(tk.END, "─" * 40 + "\n", 'divider')
+            self.result_text.insert(tk.END, f"⏰ Study Hours: {study_hours:.1f} hours/day\n")
+            hour_bar_length = min(int(study_hours / 8 * 10), 10)
+            hour_bar = "█" * hour_bar_length + "░" * (10 - hour_bar_length)
+            self.result_text.insert(tk.END, f"   [{hour_bar}] Target: 6+ hours\n\n")
+            
+            self.result_text.insert(tk.END, f"📈 Attendance: {attendance:.0f}%\n")
+            attendance_bar_length = int(attendance / 10)
+            attendance_bar = "█" * attendance_bar_length + "░" * (10 - attendance_bar_length)
+            self.result_text.insert(tk.END, f"   [{attendance_bar}] Target: 90%+\n\n")
+            
+            self.result_text.insert(tk.END, f"🚌 Travel Time: {travel_time_text}\n")
+            self.result_text.insert(tk.END, f"⭐ Extra Activities: {'Yes ✅' if extra_activities == 1 else 'No ❌'}\n")
+            self.result_text.insert(tk.END, f"🌐 Internet Access: {'Available ✅' if internet_access == 1 else 'Limited ❌'}\n\n")
+            
+            # Strengths
+            if strengths:
+                self.result_text.insert(tk.END, f"✅ STRENGTHS\n", 'header')
+                self.result_text.insert(tk.END, "─" * 40 + "\n", 'divider')
+                for strength in strengths[:5]:
+                    self.result_text.insert(tk.END, f"  {strength}\n", 'strength')
+                self.result_text.insert(tk.END, "\n")
+            
+            # Areas for Improvement
+            if weaknesses:
+                self.result_text.insert(tk.END, f"⚠️ AREAS FOR IMPROVEMENT\n", 'header')
+                self.result_text.insert(tk.END, "─" * 40 + "\n", 'divider')
+                for weakness in weaknesses[:5]:
+                    self.result_text.insert(tk.END, f"  {weakness}\n", 'weakness')
+                self.result_text.insert(tk.END, "\n")
+            
+            # Recommendations
+            self.result_text.insert(tk.END, f"💡 RECOMMENDATIONS FOR IMPROVEMENT\n", 'header')
+            self.result_text.insert(tk.END, "─" * 40 + "\n", 'divider')
+            
+            if improvement_tips:
+                for i, tip in enumerate(improvement_tips[:6], 1):
+                    self.result_text.insert(tk.END, f"  {i}. {tip}\n", 'tip')
+            else:
+                self.result_text.insert(tk.END, "  🎉 Excellent work! Keep maintaining your good habits!\n", 'strength')
+            
+            self.result_text.insert(tk.END, "\n" + "=" * 60 + "\n", 'divider')
+            self.result_text.insert(tk.END, "🎯 Focus on weak areas and maintain your strengths!\n", 'header')
+            self.result_text.insert(tk.END, "=" * 60, 'divider')
+            
+            # Store for saving
+            self.last_prediction = {
+                'name': student_name,
+                'score': predicted_score,
+                'category': overall_category,
+                'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'math_score': math_score,
+                'science_score': science_score,
+                'english_score': english_score,
+                'study_hours': study_hours,
+                'attendance': attendance,
+                'travel_time': travel_time_text,
+                'extra_activities': extra_activities,
+                'internet_access': internet_access,
+                'data': student_data
+            }
+            
             self.save_btn.config(state='normal')
-            self.update_status("Prediction completed!", 'success')
+            self.update_status("Prediction completed successfully!", 'success')
             
         except Exception as e:
-            self.update_status(f"Prediction failed: {str(e)}", 'error')
-            messagebox.showerror("Error", f"Prediction failed: {str(e)}")
+            error_msg = str(e)
+            self.update_status(f"Prediction failed: {error_msg}", 'error')
+            messagebox.showerror("Error", f"Prediction failed: {error_msg}\n\nPlease make sure the model is trained properly.")
+            logger.error(f"Prediction error: {traceback.format_exc()}")
     
     def clear_form(self):
         """Clear all input fields"""
-        for key, var in self.input_vars.items():
-            if key == 'name':
-                var.set("Student")
-            elif key == 'gender':
-                var.set('male')
-            elif key == 'school_type':
-                var.set('public')
-            elif key == 'parent_education':
-                var.set('graduate')
-            elif key == 'study_method':
-                var.set('self')
-            elif key == 'internet_access':
-                var.set('1')
-            elif key == 'extra_activities':
-                var.set('1')
-            elif key == 'travel_time':
-                var.set('0')
-            elif key == 'age':
-                var.set(16)
-            elif key == 'study_hours':
-                var.set(5)
-            elif key == 'attendance_percentage':
-                var.set(85)
-            elif key in ['math_score', 'science_score', 'english_score']:
-                var.set(70)
+        self.input_vars['name'].set("Student")
+        self.input_vars['age'].set(16)
+        self.input_vars['gender'].set('male')
+        self.input_vars['school_type'].set('public')
+        self.input_vars['parent_education'].set('graduate')
+        self.input_vars['study_hours'].set(5)
+        self.input_vars['attendance_percentage'].set(85)
+        self.input_vars['internet_access'].set('1')
+        self.input_vars['travel_time'].set('<15 min')
+        self.input_vars['extra_activities'].set('1')
+        self.input_vars['study_method'].set('textbook')
+        self.input_vars['math_score'].set(70)
+        self.input_vars['science_score'].set(70)
+        self.input_vars['english_score'].set(70)
         
         self.result_text.delete(1.0, tk.END)
         self.update_status("Form cleared", 'info')

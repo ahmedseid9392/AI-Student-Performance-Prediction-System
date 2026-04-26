@@ -219,7 +219,7 @@ class StudentPerformanceGUI:
         badge_frame = tk.Frame(header, bg=self.colors['header_bg'])
         badge_frame.pack(side='right', padx=24, pady=20)
 
-        tk.Label(badge_frame, text="v2.0",
+        tk.Label(badge_frame, text=" ",
                  font=('Segoe UI', 9, 'bold'),
                  fg=self.colors['accent'],
                  bg='#1e3a5f',
@@ -336,7 +336,7 @@ class StudentPerformanceGUI:
                  bg=self.colors['accent']).pack(anchor='w', pady=(2, 0))
 
         # Version badge on right
-        tk.Label(hero_content, text="v2.0",
+        tk.Label(hero_content, text="",
                  font=('Segoe UI', 9, 'bold'), fg='#bae6fd',
                  bg='#0369a1', padx=12, pady=4).pack(side='right')
 

@@ -30,8 +30,9 @@ class StudentPerformanceGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("🎓 AI Student Performance Prediction System")
-        self.root.geometry("1400x800")
-        self.root.configure(bg='#f0f0f0')
+        self.root.geometry("1440x860")
+        self.root.minsize(1240, 760)
+        self.root.configure(bg='#eef3f8')
         
         # Initialize components
         self.preprocessor = DataPreprocessor()
@@ -64,63 +65,214 @@ class StudentPerformanceGUI:
     
     def setup_styles(self):
         """Setup modern professional styles"""
-        style = ttk.Style()
-        style.theme_use('clam')
-        
-        # Color scheme
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+
         self.colors = {
-            'primary': '#2c3e50',
-            'secondary': '#34495e',
-            'accent': '#3498db',
-            'success': '#27ae60',
-            'warning': '#f39c12',
-            'danger': '#e74c3c',
-            'light': '#ecf0f1',
+            'primary': '#17324d',
+            'primary_soft': '#254b73',
+            'secondary': '#5f6f82',
+            'accent': '#1f7ae0',
+            'accent_dark': '#165eb1',
+            'success': '#1f9d68',
+            'warning': '#d98b18',
+            'danger': '#d14d41',
+            'light': '#eef3f8',
+            'panel': '#f7fafc',
             'dark': '#2c3e50',
             'white': '#ffffff',
-            'gray': '#95a5a6'
+            'gray': '#7a8793',
+            'border': '#d9e2ec',
+            'muted': '#9aa8b6'
         }
-        
-        # Configure styles
-        style.configure('Title.TLabel', font=('Segoe UI', 20, 'bold'), foreground=self.colors['primary'])
-        style.configure('Heading.TLabel', font=('Segoe UI', 12, 'bold'), foreground=self.colors['secondary'])
-        style.configure('Custom.Treeview', font=('Segoe UI', 9), rowheight=25)
-        style.configure('Custom.Treeview.Heading', font=('Segoe UI', 10, 'bold'))
-        style.configure('Custom.TNotebook', tabposition='nw')
-        style.configure('Custom.TNotebook.Tab', font=('Segoe UI', 10, 'bold'), padding=[10, 5])
-        style.configure('Modern.TEntry', fieldbackground='white', borderwidth=1, relief='solid')
-        style.configure('Modern.TCombobox', fieldbackground='white')
+
+        self.fonts = {
+            'title': ('Segoe UI Semibold', 20),
+            'hero': ('Segoe UI Semibold', 18),
+            'section': ('Segoe UI Semibold', 13),
+            'card_title': ('Segoe UI Semibold', 11),
+            'body': ('Segoe UI', 10),
+            'body_bold': ('Segoe UI Semibold', 10),
+            'mono': ('Consolas', 9)
+        }
+
+        self.style.configure('App.TFrame', background=self.colors['light'])
+        self.style.configure(
+            'Custom.TNotebook',
+            background=self.colors['light'],
+            borderwidth=0,
+            tabmargins=[8, 8, 8, 0]
+        )
+        self.style.configure(
+            'Custom.TNotebook.Tab',
+            font=self.fonts['body_bold'],
+            padding=[18, 10],
+            background='#dde7f0',
+            foreground=self.colors['secondary'],
+            borderwidth=0
+        )
+        self.style.map(
+            'Custom.TNotebook.Tab',
+            background=[('selected', self.colors['white']), ('active', '#e8f0f7')],
+            foreground=[('selected', self.colors['primary']), ('active', self.colors['primary'])]
+        )
+        self.style.configure(
+            'Custom.Treeview',
+            font=self.fonts['body'],
+            rowheight=28,
+            background=self.colors['white'],
+            fieldbackground=self.colors['white'],
+            borderwidth=0
+        )
+        self.style.configure(
+            'Custom.Treeview.Heading',
+            font=self.fonts['body_bold'],
+            background='#eaf1f7',
+            foreground=self.colors['primary'],
+            relief='flat'
+        )
+        self.style.map(
+            'Custom.Treeview',
+            background=[('selected', '#dcebff')],
+            foreground=[('selected', self.colors['primary'])]
+        )
+        self.style.configure(
+            'Modern.TCombobox',
+            fieldbackground=self.colors['white'],
+            background=self.colors['white'],
+            foreground=self.colors['primary'],
+            arrowcolor=self.colors['accent']
+        )
+        self.style.configure(
+            'Modern.Horizontal.TProgressbar',
+            troughcolor='#dde7f0',
+            background=self.colors['accent'],
+            bordercolor='#dde7f0',
+            lightcolor=self.colors['accent'],
+            darkcolor=self.colors['accent']
+        )
+
+    def create_card(self, parent, **pack_kwargs):
+        """Create a reusable card container."""
+        card = tk.Frame(
+            parent,
+            bg=self.colors['white'],
+            bd=1,
+            relief='solid',
+            highlightthickness=1,
+            highlightbackground=self.colors['border'],
+            highlightcolor=self.colors['border']
+        )
+        if pack_kwargs:
+            card.pack(**pack_kwargs)
+        return card
+
+    def create_section_title(self, parent, title, subtitle=None, bg=None):
+        """Create consistent section titles."""
+        bg = bg or self.colors['white']
+        wrapper = tk.Frame(parent, bg=bg)
+        wrapper.pack(fill='x', padx=22, pady=(20, 12))
+
+        tk.Label(
+            wrapper,
+            text=title,
+            font=self.fonts['section'],
+            fg=self.colors['primary'],
+            bg=bg
+        ).pack(anchor='w')
+
+        if subtitle:
+            tk.Label(
+                wrapper,
+                text=subtitle,
+                font=self.fonts['body'],
+                fg=self.colors['gray'],
+                bg=bg
+            ).pack(anchor='w', pady=(4, 0))
+
+        return wrapper
+
+    def create_action_button(self, parent, text, command, variant='accent', width=None):
+        """Create consistently styled action buttons."""
+        palette = {
+            'accent': self.colors['accent'],
+            'secondary': self.colors['primary_soft'],
+            'success': self.colors['success'],
+            'warning': self.colors['warning']
+        }
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            font=self.fonts['body_bold'],
+            bg=palette.get(variant, self.colors['accent']),
+            fg='white',
+            activebackground=self.colors['accent_dark'] if variant == 'accent' else palette.get(variant, self.colors['accent']),
+            activeforeground='white',
+            padx=18,
+            pady=10,
+            relief='flat',
+            bd=0,
+            cursor='hand2',
+            width=width
+        )
+
+    def create_text_surface(self, parent, font=None, height=12):
+        """Create a text area with consistent surface styling."""
+        return tk.Text(
+            parent,
+            height=height,
+            font=font or self.fonts['body'],
+            wrap=tk.WORD,
+            bg=self.colors['panel'],
+            fg=self.colors['primary'],
+            relief='flat',
+            bd=0,
+            padx=14,
+            pady=12,
+            insertbackground=self.colors['primary']
+        )
     
     def create_header(self):
         """Create modern header"""
-        header_frame = tk.Frame(self.root, bg=self.colors['primary'], height=80)
+        header_frame = tk.Frame(self.root, bg=self.colors['primary'], height=92)
         header_frame.pack(fill='x')
         header_frame.pack_propagate(False)
-        
-        title_label = tk.Label(header_frame, 
-                               text="🎓 AI Student Performance Prediction System",
-                               font=('Segoe UI', 18, 'bold'),
-                               fg='white', bg=self.colors['primary'])
-        title_label.pack(side='left', padx=20, pady=20)
-        
-        subtitle_label = tk.Label(header_frame,
-                                  text="Machine Learning Powered Academic Analytics",
-                                  font=('Segoe UI', 10),
-                                  fg='#ecf0f1', bg=self.colors['primary'])
-        subtitle_label.pack(side='left', padx=10, pady=25)
-        
-        version_badge = tk.Label(header_frame,
-                                 text="v2.0",
-                                 font=('Segoe UI', 9, 'bold'),
-                                 fg=self.colors['primary'],
-                                 bg=self.colors['light'],
-                                 padx=10, pady=2)
-        version_badge.pack(side='right', padx=20, pady=25)
+
+        left_block = tk.Frame(header_frame, bg=self.colors['primary'])
+        left_block.pack(side='left', fill='y', padx=26, pady=16)
+
+        tk.Label(
+            left_block,
+            text="🎓 AI Student Performance Prediction System",
+            font=self.fonts['hero'],
+            fg='white',
+            bg=self.colors['primary']
+        ).pack(anchor='w')
+
+        tk.Label(
+            left_block,
+            text="Machine learning powered academic analytics for smarter student support",
+            font=self.fonts['body'],
+            fg='#d8e5f2',
+            bg=self.colors['primary']
+        ).pack(anchor='w', pady=(4, 0))
+
+        version_badge = tk.Label(
+            header_frame,
+            text="Version 2.0",
+            font=self.fonts['body_bold'],
+            fg=self.colors['primary'],
+            bg='#dfeaf5',
+            padx=14,
+            pady=5
+        )
+        version_badge.pack(side='right', padx=24, pady=24)
     
     def create_main_layout(self):
         """Create main application layout"""
         main_container = tk.Frame(self.root, bg=self.colors['light'])
-        main_container.pack(fill='both', expand=True, padx=10, pady=10)
+        main_container.pack(fill='both', expand=True, padx=16, pady=16)
         
         self.notebook = ttk.Notebook(main_container, style='Custom.TNotebook')
         self.notebook.pack(fill='both', expand=True)
@@ -133,93 +285,121 @@ class StudentPerformanceGUI:
     
     def create_dashboard_tab(self):
         """Create dashboard tab"""
-        dashboard_frame = ttk.Frame(self.notebook)
+        dashboard_frame = tk.Frame(self.notebook, bg=self.colors['light'])
         self.notebook.add(dashboard_frame, text="📊 Dashboard")
-        
-        welcome_card = tk.Frame(dashboard_frame, bg=self.colors['white'], relief='raised', bd=1)
-        welcome_card.pack(fill='x', padx=20, pady=20)
-        
-        tk.Label(welcome_card, text="Welcome to AI Performance Predictor",
-                font=('Segoe UI', 16, 'bold'), bg=self.colors['white'],
-                fg=self.colors['primary']).pack(pady=20)
-        
-        tk.Label(welcome_card, 
-                text="Upload your dataset, train the AI model, and predict student performance with high accuracy",
-                font=('Segoe UI', 10), bg=self.colors['white'],
-                fg=self.colors['gray']).pack(pady=(0, 20))
-        
+
+        welcome_card = self.create_card(dashboard_frame, fill='x', padx=22, pady=(22, 14))
+        self.create_section_title(
+            welcome_card,
+            "Welcome to the AI Performance Predictor",
+            "Load student data, train your model, and generate prediction insights from one workspace."
+        )
+
+        hero_strip = tk.Frame(welcome_card, bg='#edf5ff', height=78)
+        hero_strip.pack(fill='x', padx=22, pady=(0, 22))
+        hero_strip.pack_propagate(False)
+
+        tk.Label(
+            hero_strip,
+            text="Designed for fast dataset review, training workflows, and clean reporting.",
+            font=self.fonts['body_bold'],
+            fg=self.colors['primary'],
+            bg='#edf5ff'
+        ).pack(anchor='w', padx=18, pady=(16, 4))
+
+        tk.Label(
+            hero_strip,
+            text="Everything below keeps the same functionality while presenting it in a clearer, more professional layout.",
+            font=self.fonts['body'],
+            fg=self.colors['secondary'],
+            bg='#edf5ff'
+        ).pack(anchor='w', padx=18)
+
         actions_frame = tk.Frame(dashboard_frame, bg=self.colors['light'])
-        actions_frame.pack(fill='x', padx=20, pady=20)
-        
-        tk.Label(actions_frame, text="Quick Actions", font=('Segoe UI', 14, 'bold'),
-                bg=self.colors['light'], fg=self.colors['primary']).pack(anchor='w', pady=10)
-        
+        actions_frame.pack(fill='x', padx=22, pady=6)
+        self.create_section_title(actions_frame, "Quick Actions", "Jump directly into the most common tasks.", bg=self.colors['light'])
+
         button_frame = tk.Frame(actions_frame, bg=self.colors['light'])
         button_frame.pack(fill='x')
-        
+
         actions = [
-            ("📁 Load Dataset", self.load_dataset),
-            ("🎯 Train Model", self.train_model),
-            ("🔮 Make Prediction", lambda: self.notebook.select(1)),
-            ("📊 View Reports", lambda: self.notebook.select(4))
+            ("📁 Load Dataset", self.load_dataset, 'accent'),
+            ("🎯 Train Model", self.train_model, 'secondary'),
+            ("🔮 Make Prediction", lambda: self.notebook.select(1), 'success'),
+            ("📈 View Reports", lambda: self.notebook.select(4), 'warning')
         ]
-        
-        for text, command in actions:
-            btn = tk.Button(button_frame, text=text, command=command,
-                          font=('Segoe UI', 10, 'bold'),
-                          bg=self.colors['accent'], fg='white', 
-                          padx=20, pady=10, cursor='hand2', relief='flat')
-            btn.pack(side='left', padx=10)
-        
+
+        for text, command, variant in actions:
+            btn = self.create_action_button(button_frame, text, command, variant=variant)
+            btn.pack(side='left', padx=(0, 12))
+
         stats_frame = tk.Frame(dashboard_frame, bg=self.colors['light'])
-        stats_frame.pack(fill='x', padx=20, pady=20)
-        
-        tk.Label(stats_frame, text="System Status", font=('Segoe UI', 14, 'bold'),
-                bg=self.colors['light'], fg=self.colors['primary']).pack(anchor='w', pady=10)
-        
+        stats_frame.pack(fill='x', padx=22, pady=(10, 22))
+        self.create_section_title(stats_frame, "System Status", "A quick summary of the current workspace state.", bg=self.colors['light'])
+
         stats_grid = tk.Frame(stats_frame, bg=self.colors['light'])
         stats_grid.pack(fill='x')
-        
+
         stats = [
-            ("Dataset Status", "No Data Loaded", "📁"),
-            ("Model Status", "Not Trained", "🤖"),
-            ("Prediction Ready", "No", "🎯"),
-            ("Database", "Connected" if self.db_manager else "Offline", "💾")
+            ("Dataset Status", "No Data Loaded", "DATASET"),
+            ("Model Status", "Not Trained", "MODEL"),
+            ("Prediction Ready", "No", "READY"),
+            ("Database", "Connected" if self.db_manager else "Offline", "STORAGE")
         ]
-        
+
         self.status_cards = {}
-        for i, (title, value, icon) in enumerate(stats):
-            card = tk.Frame(stats_grid, bg=self.colors['white'], relief='raised', bd=1)
-            card.grid(row=0, column=i, padx=10, pady=10, sticky='nsew')
+        for i, (title, value, eyebrow) in enumerate(stats):
+            card = self.create_card(stats_grid)
+            card.grid(row=0, column=i, padx=8, pady=8, sticky='nsew')
             stats_grid.grid_columnconfigure(i, weight=1)
-            
-            tk.Label(card, text=f"{icon} {title}", font=('Segoe UI', 10, 'bold'),
-                    bg=self.colors['white'], fg=self.colors['secondary']).pack(pady=(10,5))
-            
-            value_label = tk.Label(card, text=value, font=('Segoe UI', 11),
-                                  bg=self.colors['white'], fg=self.colors['accent'])
-            value_label.pack(pady=(0,10))
-            
+
+            tk.Label(
+                card,
+                text=eyebrow,
+                font=('Segoe UI', 8, 'bold'),
+                bg=self.colors['white'],
+                fg=self.colors['muted']
+            ).pack(anchor='w', padx=16, pady=(14, 6))
+
+            tk.Label(
+                card,
+                text=title,
+                font=self.fonts['card_title'],
+                bg=self.colors['white'],
+                fg=self.colors['primary']
+            ).pack(anchor='w', padx=16)
+
+            value_label = tk.Label(
+                card,
+                text=value,
+                font=('Segoe UI Semibold', 11),
+                bg=self.colors['white'],
+                fg=self.colors['accent']
+            )
+            value_label.pack(anchor='w', padx=16, pady=(8, 16))
+
             self.status_cards[title] = value_label
     
     def create_prediction_tab(self):
         """Create prediction tab"""
-        prediction_frame = ttk.Frame(self.notebook)
+        prediction_frame = tk.Frame(self.notebook, bg=self.colors['light'])
         self.notebook.add(prediction_frame, text="🔮 Predict Performance")
-        
+
         left_panel = tk.Frame(prediction_frame, bg=self.colors['light'])
-        left_panel.pack(side='left', fill='both', expand=True, padx=10, pady=10)
-        
+        left_panel.pack(side='left', fill='both', expand=True, padx=(22, 10), pady=22)
+
         right_panel = tk.Frame(prediction_frame, bg=self.colors['light'])
-        right_panel.pack(side='right', fill='both', expand=True, padx=10, pady=10)
-        
-        form_card = tk.Frame(left_panel, bg=self.colors['white'], relief='raised', bd=1)
+        right_panel.pack(side='right', fill='both', expand=True, padx=(10, 22), pady=22)
+
+        form_card = self.create_card(left_panel)
         form_card.pack(fill='both', expand=True)
-        
-        tk.Label(form_card, text="Student Information Form",
-                font=('Segoe UI', 14, 'bold'),
-                bg=self.colors['white'], fg=self.colors['primary']).pack(pady=15)
-        
+
+        self.create_section_title(
+            form_card,
+            "Student Information Form",
+            "Enter the learner profile below to generate a performance estimate."
+        )
+
         canvas = tk.Canvas(form_card, bg=self.colors['white'], highlightthickness=0)
         scrollbar = ttk.Scrollbar(form_card, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['white'])
@@ -229,28 +409,35 @@ class StudentPerformanceGUI:
         canvas.configure(yscrollcommand=scrollbar.set)
         
         fields = [
-            ('👤 Student Name:', 'name', 'text'),
-            ('📊 Age:', 'age', 'number'),
-            ('⚥ Gender:', 'gender', 'combo'),
-            ('🏫 School Type:', 'school_type', 'combo'),
-            ('🎓 Parent Education:', 'parent_education', 'combo'),
-            ('📚 Study Hours/Day:', 'study_hours', 'number'),
-            ('📈 Attendance %:', 'attendance_percentage', 'number'),
-            ('🌐 Internet Access:', 'internet_access', 'combo'),
-            ('🚌 Travel Time:', 'travel_time', 'combo'),
-            ('⭐ Extra Activities:', 'extra_activities', 'combo'),
-            ('📖 Study Method:', 'study_method', 'combo'),
-            ('🧮 Math Score:', 'math_score', 'number'),
-            ('🔬 Science Score:', 'science_score', 'number'),
-            ('📝 English Score:', 'english_score', 'number')
+            ('Student Name', 'name', 'text'),
+            ('Age', 'age', 'number'),
+            ('Gender', 'gender', 'combo'),
+            ('School Type', 'school_type', 'combo'),
+            ('Parent Education', 'parent_education', 'combo'),
+            ('Study Hours / Day', 'study_hours', 'number'),
+            ('Attendance %', 'attendance_percentage', 'number'),
+            ('Internet Access', 'internet_access', 'combo'),
+            ('Travel Time', 'travel_time', 'combo'),
+            ('Extra Activities', 'extra_activities', 'combo'),
+            ('Study Method', 'study_method', 'combo'),
+            ('Math Score', 'math_score', 'number'),
+            ('Science Score', 'science_score', 'number'),
+            ('English Score', 'english_score', 'number')
         ]
-        
+
         self.input_vars = {}
-        
+        scrollable_frame.grid_columnconfigure(1, weight=1)
+
         for i, (label, key, field_type) in enumerate(fields):
-            tk.Label(scrollable_frame, text=label, font=('Segoe UI', 10),
-                    bg=self.colors['white'], anchor='w').grid(row=i, column=0, sticky='w', pady=5, padx=10)
-            
+            tk.Label(
+                scrollable_frame,
+                text=label,
+                font=self.fonts['body_bold'],
+                fg=self.colors['primary'],
+                bg=self.colors['white'],
+                anchor='w'
+            ).grid(row=i, column=0, sticky='w', pady=8, padx=(18, 10))
+
             if field_type == 'combo':
                 var = tk.StringVar()
                 if key == 'gender':
@@ -273,10 +460,10 @@ class StudentPerformanceGUI:
                     var.set('<15 min')
                 else:
                     values = []
-                
+
                 combo = ttk.Combobox(scrollable_frame, textvariable=var, values=values,
-                                    font=('Segoe UI', 10), width=28)
-                combo.grid(row=i, column=1, pady=5, padx=10, sticky='ew')
+                                    font=self.fonts['body'], width=28, style='Modern.TCombobox', state='readonly')
+                combo.grid(row=i, column=1, pady=8, padx=(0, 18), sticky='ew')
                 self.input_vars[key] = var
             else:
                 var = tk.DoubleVar() if field_type == 'number' else tk.StringVar()
@@ -290,184 +477,192 @@ class StudentPerformanceGUI:
                     var.set(70)
                 elif key == 'name':
                     var.set("Student")
-                
+
                 entry = tk.Entry(scrollable_frame, textvariable=var, font=('Segoe UI', 10),
-                               bg='white', relief='solid', bd=1, width=30)
-                entry.grid(row=i, column=1, pady=5, padx=10, sticky='ew')
+                               bg='white', relief='solid', bd=1, width=30,
+                               highlightthickness=1, highlightbackground=self.colors['border'],
+                               highlightcolor=self.colors['accent'])
+                entry.grid(row=i, column=1, pady=8, padx=(0, 18), sticky='ew')
                 self.input_vars[key] = var
-        
-        predict_btn = tk.Button(scrollable_frame, text="🔮 PREDICT PERFORMANCE",
-                               command=self.predict_performance,
-                               font=('Segoe UI', 12, 'bold'),
-                               bg=self.colors['accent'], fg='white',
-                               padx=40, pady=10, cursor='hand2', relief='flat')
-        predict_btn.grid(row=len(fields), column=0, columnspan=2, pady=20)
-        
-        canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+
+        predict_btn = self.create_action_button(
+            scrollable_frame,
+            "Generate Performance Prediction",
+            self.predict_performance,
+            variant='accent'
+        )
+        predict_btn.grid(row=len(fields), column=0, columnspan=2, pady=24, padx=18, sticky='ew')
+
+        canvas.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=(0, 10))
         scrollbar.pack(side="right", fill="y")
-        
-        results_card = tk.Frame(right_panel, bg=self.colors['white'], relief='raised', bd=1)
+
+        results_card = self.create_card(right_panel)
         results_card.pack(fill='both', expand=True)
-        
-        tk.Label(results_card, text="Prediction Results",
-                font=('Segoe UI', 14, 'bold'),
-                bg=self.colors['white'], fg=self.colors['primary']).pack(pady=15)
-        
-        self.result_text = tk.Text(results_card, height=20, width=45,
-                                  font=('Segoe UI', 11), wrap=tk.WORD,
-                                  bg=self.colors['light'], relief='flat')
-        self.result_text.pack(fill='both', expand=True, padx=10, pady=10)
-        
+
+        self.create_section_title(
+            results_card,
+            "Prediction Results",
+            "Model output and performance guidance will appear here after a prediction is made."
+        )
+
+        self.result_text = self.create_text_surface(results_card, font=('Segoe UI', 11), height=20)
+        self.result_text.pack(fill='both', expand=True, padx=22, pady=(0, 14))
+
         button_frame = tk.Frame(results_card, bg=self.colors['white'])
-        button_frame.pack(fill='x', pady=10)
-        
-        self.save_btn = tk.Button(button_frame, text="💾 Save to Database",
-                                 command=self.save_prediction, state='disabled',
-                                 font=('Segoe UI', 10), bg=self.colors['success'],
-                                 fg='white', padx=20, pady=5, cursor='hand2')
-        self.save_btn.pack(side='left', padx=10)
-        
-        export_btn = tk.Button(button_frame, text="📎 Export Results",
-                              command=self.export_results,
-                              font=('Segoe UI', 10), bg=self.colors['secondary'],
-                              fg='white', padx=20, pady=5, cursor='hand2')
-        export_btn.pack(side='left', padx=10)
-        
-        clear_btn = tk.Button(button_frame, text="🔄 Clear Form",
-                             command=self.clear_form,
-                             font=('Segoe UI', 10), bg=self.colors['warning'],
-                             fg='white', padx=20, pady=5, cursor='hand2')
-        clear_btn.pack(side='left', padx=10)
+        button_frame.pack(fill='x', padx=22, pady=(0, 18))
+
+        self.save_btn = self.create_action_button(
+            button_frame,
+            "Save to Database",
+            self.save_prediction,
+            variant='success'
+        )
+        self.save_btn.config(state='disabled')
+        self.save_btn.pack(side='left', padx=(0, 10))
+
+        export_btn = self.create_action_button(
+            button_frame,
+            "Export Results",
+            self.export_results,
+            variant='secondary'
+        )
+        export_btn.pack(side='left', padx=(0, 10))
+
+        clear_btn = self.create_action_button(
+            button_frame,
+            "Clear Form",
+            self.clear_form,
+            variant='warning'
+        )
+        clear_btn.pack(side='left')
     
     def create_training_tab(self):
         """Create training tab"""
-        training_frame = ttk.Frame(self.notebook)
+        training_frame = tk.Frame(self.notebook, bg=self.colors['light'])
         self.notebook.add(training_frame, text="🤖 Model Training")
-        
-        control_card = tk.Frame(training_frame, bg=self.colors['white'], relief='raised', bd=1)
-        control_card.pack(fill='x', padx=20, pady=20)
-        
-        tk.Label(control_card, text="Training Controls",
-                font=('Segoe UI', 14, 'bold'),
-                bg=self.colors['white'], fg=self.colors['primary']).pack(pady=15)
-        
+
+        control_card = self.create_card(training_frame, fill='x', padx=22, pady=(22, 14))
+        self.create_section_title(
+            control_card,
+            "Training Controls",
+            "Manage dataset loading, model training, and saved model lifecycle from this panel."
+        )
+
         button_frame = tk.Frame(control_card, bg=self.colors['white'])
-        button_frame.pack(pady=10)
-        
+        button_frame.pack(fill='x', padx=22, pady=(0, 20))
+
         buttons = [
-            ("📁 Load Dataset", self.load_dataset),
-            ("🎯 Train Model", self.train_model),
-            ("💾 Save Model", self.save_model),
-            ("📂 Load Model", self.load_model)
+            ("📁 Load Dataset", self.load_dataset, 'accent'),
+            ("🎯 Train Model", self.train_model, 'secondary'),
+            ("💾 Save Model", self.save_model, 'success'),
+            ("📂 Load Model", self.load_model, 'warning')
         ]
-        
-        for text, command in buttons:
-            btn = tk.Button(button_frame, text=text, command=command,
-                          font=('Segoe UI', 10), bg=self.colors['accent'], fg='white',
-                          padx=20, pady=8, cursor='hand2', relief='flat')
-            btn.pack(side='left', padx=10)
-        
-        self.progress = ttk.Progressbar(training_frame, mode='indeterminate', length=400)
-        self.progress.pack(pady=20)
-        
-        results_card = tk.Frame(training_frame, bg=self.colors['white'], relief='raised', bd=1)
-        results_card.pack(fill='both', expand=True, padx=20, pady=20)
-        
-        tk.Label(results_card, text="Training Results",
-                font=('Segoe UI', 14, 'bold'),
-                bg=self.colors['white'], fg=self.colors['primary']).pack(pady=10)
-        
+
+        for text, command, variant in buttons:
+            btn = self.create_action_button(button_frame, text, command, variant=variant)
+            btn.pack(side='left', padx=(0, 10))
+
+        self.progress = ttk.Progressbar(training_frame, mode='indeterminate', length=460, style='Modern.Horizontal.TProgressbar')
+        self.progress.pack(pady=(0, 14))
+
+        results_card = self.create_card(training_frame, fill='both', expand=True, padx=22, pady=(0, 22))
+        self.create_section_title(
+            results_card,
+            "Training Results",
+            "Live preprocessing and training output is shown here."
+        )
+
         text_frame = tk.Frame(results_card, bg=self.colors['white'])
-        text_frame.pack(fill='both', expand=True, padx=10, pady=10)
-        
-        self.training_text = tk.Text(text_frame, height=15, font=('Consolas', 9),
-                                    wrap=tk.WORD, bg=self.colors['light'], relief='flat')
+        text_frame.pack(fill='both', expand=True, padx=22, pady=(0, 18))
+
+        self.training_text = self.create_text_surface(text_frame, font=self.fonts['mono'], height=15)
         self.training_text.pack(side='left', fill='both', expand=True)
-        
+
         scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=self.training_text.yview)
         scrollbar.pack(side='right', fill='y')
         self.training_text.configure(yscrollcommand=scrollbar.set)
     
     def create_data_tab(self):
         """Create data management tab with pagination"""
-        data_frame = ttk.Frame(self.notebook)
+        data_frame = tk.Frame(self.notebook, bg=self.colors['light'])
         self.notebook.add(data_frame, text="📊 Data Management")
-        
-        preview_card = tk.Frame(data_frame, bg=self.colors['white'], relief='raised', bd=1)
-        preview_card.pack(fill='both', expand=True, padx=20, pady=20)
-        
+
+        preview_card = self.create_card(data_frame, fill='both', expand=True, padx=22, pady=(22, 14))
         header_frame = tk.Frame(preview_card, bg=self.colors['white'])
-        header_frame.pack(fill='x', padx=10, pady=10)
-        
+        header_frame.pack(fill='x', padx=22, pady=(18, 12))
+
         self.dataset_info_label = tk.Label(header_frame, text="No dataset loaded", 
-                                           font=('Segoe UI', 10, 'bold'),
+                                           font=self.fonts['card_title'],
                                            bg=self.colors['white'], fg=self.colors['primary'])
         self.dataset_info_label.pack(side='left')
-        
+
         pagination_frame = tk.Frame(header_frame, bg=self.colors['white'])
         pagination_frame.pack(side='right')
-        
+
         tk.Label(pagination_frame, text="Rows per page:", bg=self.colors['white'],
-                font=('Segoe UI', 9)).pack(side='left', padx=5)
-        
+                font=self.fonts['body']).pack(side='left', padx=5)
+
         self.rows_per_page = tk.StringVar(value="100")
         rows_combo = ttk.Combobox(pagination_frame, textvariable=self.rows_per_page,
                                   values=["50", "100", "500", "1000", "5000", "All"],
-                                  width=8, state='readonly')
+                                  width=8, state='readonly', style='Modern.TCombobox')
         rows_combo.pack(side='left', padx=5)
         rows_combo.bind('<<ComboboxSelected>>', lambda e: self.refresh_data_preview())
-        
+
         self.page_var = tk.StringVar(value="Page 1")
         page_label = tk.Label(pagination_frame, textvariable=self.page_var,
-                             bg=self.colors['white'], font=('Segoe UI', 9))
+                             bg=self.colors['white'], font=self.fonts['body'])
         page_label.pack(side='left', padx=10)
-        
-        self.prev_btn = tk.Button(pagination_frame, text="◀ Previous", 
-                                  command=self.prev_page, state='disabled',
-                                  font=('Segoe UI', 9), bg=self.colors['secondary'],
-                                  fg='white', cursor='hand2', relief='flat')
+
+        self.prev_btn = self.create_action_button(
+            pagination_frame,
+            "◀ Previous",
+            self.prev_page,
+            variant='secondary'
+        )
+        self.prev_btn.config(state='disabled', padx=12, pady=6)
         self.prev_btn.pack(side='left', padx=2)
-        
-        self.next_btn = tk.Button(pagination_frame, text="Next ▶", 
-                                  command=self.next_page, state='disabled',
-                                  font=('Segoe UI', 9), bg=self.colors['secondary'],
-                                  fg='white', cursor='hand2', relief='flat')
+
+        self.next_btn = self.create_action_button(
+            pagination_frame,
+            "Next ▶",
+            self.next_page,
+            variant='secondary'
+        )
+        self.next_btn.config(state='disabled', padx=12, pady=6)
         self.next_btn.pack(side='left', padx=2)
-        
-        export_btn = tk.Button(header_frame, text="📎 Export View", 
-                              command=self.export_current_view,
-                              font=('Segoe UI', 9), bg=self.colors['success'],
-                              fg='white', cursor='hand2', relief='flat')
+
+        export_btn = self.create_action_button(header_frame, "Export View", self.export_current_view, variant='success')
+        export_btn.config(padx=14, pady=6)
         export_btn.pack(side='right', padx=10)
-        
+
         tree_frame = tk.Frame(preview_card, bg=self.colors['white'])
-        tree_frame.pack(fill='both', expand=True, padx=10, pady=10)
-        
+        tree_frame.pack(fill='both', expand=True, padx=22, pady=(0, 12))
+
         self.data_tree = ttk.Treeview(tree_frame, style='Custom.Treeview', height=20)
         self.data_tree.pack(side='left', fill='both', expand=True)
-        
+
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.data_tree.yview)
         vsb.pack(side='right', fill='y')
         self.data_tree.configure(yscrollcommand=vsb.set)
-        
+
         hsb = ttk.Scrollbar(preview_card, orient="horizontal", command=self.data_tree.xview)
-        hsb.pack(fill='x', padx=10, pady=(0, 10))
+        hsb.pack(fill='x', padx=22, pady=(0, 18))
         self.data_tree.configure(xscrollcommand=hsb.set)
-        
-        stats_card = tk.Frame(data_frame, bg=self.colors['white'], relief='raised', bd=1)
-        stats_card.pack(fill='x', padx=20, pady=20)
-        
-        tk.Label(stats_card, text="Dataset Statistics",
-                font=('Segoe UI', 12, 'bold'),
-                bg=self.colors['white'], fg=self.colors['primary']).pack(pady=10)
-        
+
+        stats_card = self.create_card(data_frame, fill='x', padx=22, pady=(0, 22))
+        self.create_section_title(
+            stats_card,
+            "Dataset Statistics",
+            "Summary metrics and quick profiling for the currently loaded dataset."
+        )
+
         stats_frame = tk.Frame(stats_card, bg=self.colors['white'])
-        stats_frame.pack(fill='both', expand=True, padx=10, pady=10)
-        
-        self.stats_text = tk.Text(stats_frame, height=8, font=('Consolas', 9),
-                                 wrap=tk.WORD, bg=self.colors['light'], relief='flat')
+        stats_frame.pack(fill='both', expand=True, padx=22, pady=(0, 18))
+
+        self.stats_text = self.create_text_surface(stats_frame, font=self.fonts['mono'], height=8)
         self.stats_text.pack(side='left', fill='both', expand=True)
-        
+
         stats_scrollbar = ttk.Scrollbar(stats_frame, orient="vertical", command=self.stats_text.yview)
         stats_scrollbar.pack(side='right', fill='y')
         self.stats_text.configure(yscrollcommand=stats_scrollbar.set)
@@ -572,51 +767,52 @@ class StudentPerformanceGUI:
     
     def create_reports_tab(self):
         """Create reports tab"""
-        reports_frame = ttk.Frame(self.notebook)
+        reports_frame = tk.Frame(self.notebook, bg=self.colors['light'])
         self.notebook.add(reports_frame, text="📈 Reports")
-        
+
         button_panel = tk.Frame(reports_frame, bg=self.colors['light'])
-        button_panel.pack(fill='x', padx=20, pady=20)
-        
+        button_panel.pack(fill='x', padx=22, pady=(22, 10))
+        self.create_section_title(button_panel, "Reports and Insights", "Open prediction history, student records, model metrics, and charts from this view.", bg=self.colors['light'])
+
         buttons = [
-            ("📜 Prediction History", self.show_prediction_history),
-            ("👥 Student Records", self.show_student_records),
-            ("📊 Model Performance", self.show_model_performance),
-            ("📈 Visualizations", self.show_visualizations)
+            ("Prediction History", self.show_prediction_history, 'accent'),
+            ("Student Records", self.show_student_records, 'secondary'),
+            ("Model Performance", self.show_model_performance, 'success'),
+            ("Visualizations", self.show_visualizations, 'warning')
         ]
-        
-        for text, command in buttons:
-            btn = tk.Button(button_panel, text=text, command=command,
-                          font=('Segoe UI', 10), bg=self.colors['accent'],
-                          fg='white', padx=20, pady=8, cursor='hand2', relief='flat')
-            btn.pack(side='left', padx=10)
-        
-        display_card = tk.Frame(reports_frame, bg=self.colors['white'], relief='raised', bd=1)
-        display_card.pack(fill='both', expand=True, padx=20, pady=20)
-        
-        tk.Label(display_card, text="Report Viewer",
-                font=('Segoe UI', 14, 'bold'),
-                bg=self.colors['white'], fg=self.colors['primary']).pack(pady=10)
-        
-        self.report_display = tk.Text(display_card, height=20, font=('Consolas', 9),
-                                     wrap=tk.WORD, bg=self.colors['light'], relief='flat')
-        self.report_display.pack(fill='both', expand=True, padx=10, pady=10)
+
+        actions_row = tk.Frame(button_panel, bg=self.colors['light'])
+        actions_row.pack(fill='x')
+
+        for text, command, variant in buttons:
+            btn = self.create_action_button(actions_row, text, command, variant=variant)
+            btn.pack(side='left', padx=(0, 10))
+
+        display_card = self.create_card(reports_frame, fill='both', expand=True, padx=22, pady=(0, 22))
+        self.create_section_title(
+            display_card,
+            "Report Viewer",
+            "Generated report content will be displayed in this panel."
+        )
+
+        self.report_display = self.create_text_surface(display_card, font=self.fonts['mono'], height=20)
+        self.report_display.pack(fill='both', expand=True, padx=22, pady=(0, 20))
     
     def create_status_bar(self):
         """Create status bar"""
-        self.status_bar = tk.Frame(self.root, bg=self.colors['secondary'], height=30)
+        self.status_bar = tk.Frame(self.root, bg=self.colors['primary'], height=34)
         self.status_bar.pack(fill='x', side='bottom')
         self.status_bar.pack_propagate(False)
-        
-        self.status_label = tk.Label(self.status_bar, text="✅ System Ready",
-                                    font=('Segoe UI', 9), fg='white',
-                                    bg=self.colors['secondary'])
-        self.status_label.pack(side='left', padx=10, pady=5)
-        
+
+        self.status_label = tk.Label(self.status_bar, text="Ready",
+                                    font=self.fonts['body'], fg='white',
+                                    bg=self.colors['primary'])
+        self.status_label.pack(side='left', padx=14, pady=7)
+
         self.clock_label = tk.Label(self.status_bar, text="",
-                                   font=('Segoe UI', 9), fg='white',
-                                   bg=self.colors['secondary'])
-        self.clock_label.pack(side='right', padx=10, pady=5)
+                                   font=self.fonts['body'], fg='white',
+                                   bg=self.colors['primary'])
+        self.clock_label.pack(side='right', padx=14, pady=7)
         self.update_clock()
     
     def update_clock(self):

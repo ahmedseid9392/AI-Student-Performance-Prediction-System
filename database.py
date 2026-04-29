@@ -13,6 +13,27 @@ from config import DB_CONFIG
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+STUDENT_SCHEMA = {
+    'student_id': 'INT AUTO_INCREMENT PRIMARY KEY',
+    'name': 'VARCHAR(100) NULL',
+    'age': 'INT',
+    'gender': 'VARCHAR(20)',
+    'school_type': 'VARCHAR(20)',
+    'parent_education': 'VARCHAR(50)',
+    'study_hours': 'FLOAT',
+    'attendance_percentage': 'FLOAT',
+    'internet_access': 'VARCHAR(10)',
+    'travel_time': 'VARCHAR(20)',
+    'extra_activities': 'VARCHAR(10)',
+    'study_method': 'VARCHAR(50)',
+    'math_score': 'FLOAT',
+    'science_score': 'FLOAT',
+    'english_score': 'FLOAT',
+    'overall_score': 'FLOAT NULL',
+    'final_grade': 'VARCHAR(5) NULL',
+    'created_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
+}
+
 class DatabaseManager:
     """Manages all database operations"""
     
@@ -57,22 +78,12 @@ class DatabaseManager:
             cursor = self.connection.cursor()
             
             # Students table
-            cursor.execute("""
+            student_columns_sql = ",\n                    ".join(
+                f"{column} {definition}" for column, definition in STUDENT_SCHEMA.items()
+            )
+            cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS students (
-                    student_id INT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(100),
-                    study_time_hours FLOAT,
-                    attendance_percentage FLOAT,
-                    previous_grade FLOAT,
-                    sleep_hours FLOAT,
-                    extracurricular_activities INT,
-                    parent_education_level INT,
-                    family_income_level INT,
-                    internet_access INT,
-                    tutoring_sessions INT,
-                    gender VARCHAR(10),
-                    school_type VARCHAR(20),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    {student_columns_sql}
                 )
             """)
             
@@ -103,23 +114,69 @@ class DatabaseManager:
             """)
             
             self.connection.commit()
+            self.sync_student_schema()
             logger.info("Tables created successfully")
         except Error as e:
             logger.error(f"Error creating tables: {e}")
+
+    def sync_student_schema(self):
+        """Synchronize students table with dataset-based schema."""
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            cursor.execute("SHOW COLUMNS FROM students")
+            existing_columns = {column['Field']: column for column in cursor.fetchall()}
+
+            for column_name, definition in STUDENT_SCHEMA.items():
+                if column_name not in existing_columns:
+                    cursor.execute(f"ALTER TABLE students ADD COLUMN {column_name} {definition}")
+                    logger.info(f"Added missing students column: {column_name}")
+                    continue
+
+                if column_name == 'student_id':
+                    continue
+
+                current_type = existing_columns[column_name]['Type'].lower()
+                expected_type = definition.lower().split()[0]
+
+                if expected_type == 'varchar':
+                    needs_modify = not current_type.startswith('varchar')
+                elif expected_type == 'timestamp':
+                    needs_modify = not current_type.startswith('timestamp')
+                else:
+                    needs_modify = not current_type.startswith(expected_type)
+
+                if needs_modify:
+                    cursor.execute(f"ALTER TABLE students MODIFY COLUMN {column_name} {definition}")
+                    logger.info(f"Updated students column definition: {column_name}")
+
+            self.connection.commit()
+        except Error as e:
+            logger.error(f"Error synchronizing students schema: {e}")
     
     def insert_student(self, student_data):
         """Insert student record"""
         try:
             cursor = self.connection.cursor()
-            query = """
-                INSERT INTO students (
-                    name, study_time_hours, attendance_percentage, previous_grade,
-                    sleep_hours, extracurricular_activities, parent_education_level,
-                    family_income_level, internet_access, tutoring_sessions,
-                    gender, school_type
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, student_data)
+            if isinstance(student_data, dict):
+                insertable_columns = [
+                    column for column in STUDENT_SCHEMA
+                    if column not in {'student_id', 'created_at'} and column in student_data
+                ]
+                insert_values = [student_data[column] for column in insertable_columns]
+            else:
+                insertable_columns = [
+                    'name', 'age', 'gender', 'school_type', 'parent_education',
+                    'study_hours', 'attendance_percentage', 'internet_access',
+                    'travel_time', 'extra_activities', 'study_method',
+                    'math_score', 'science_score', 'english_score',
+                    'overall_score', 'final_grade'
+                ]
+                insert_values = list(student_data)
+
+            placeholders = ', '.join(['%s'] * len(insertable_columns))
+            columns_sql = ', '.join(insertable_columns)
+            query = f"INSERT INTO students ({columns_sql}) VALUES ({placeholders})"
+            cursor.execute(query, insert_values)
             self.connection.commit()
             student_id = cursor.lastrowid
             logger.info(f"Student inserted with ID: {student_id}")
@@ -176,7 +233,8 @@ class DatabaseManager:
         """Retrieve prediction history"""
         try:
             query = """
-                SELECT s.name, p.predicted_score, p.performance_category, 
+                SELECT COALESCE(s.name, CONCAT('Student ', s.student_id)) AS student_name,
+                       p.predicted_score, p.performance_category, 
                        p.confidence_score, p.prediction_date
                 FROM predictions p
                 JOIN students s ON p.student_id = s.student_id

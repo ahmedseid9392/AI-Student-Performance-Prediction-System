@@ -453,8 +453,8 @@ class StudentPerformanceGUI:
                     values = ['textbook', 'group study', 'coaching', 'mixed', 'online videos', 'notes']
                     var.set('textbook')
                 elif key in ['internet_access', 'extra_activities']:
-                    values = ['0', '1']
-                    var.set('1')
+                    values = ['yes', 'no']
+                    var.set('yes')
                 elif key == 'travel_time':
                     values = ['<15 min', '15-30 min', '30-60 min', '>60 min']
                     var.set('<15 min')
@@ -788,6 +788,69 @@ class StudentPerformanceGUI:
             btn = self.create_action_button(actions_row, text, command, variant=variant)
             btn.pack(side='left', padx=(0, 10))
 
+        summary_card = self.create_card(reports_frame, fill='x', padx=22, pady=(0, 14))
+        self.create_section_title(
+            summary_card,
+            "Visual Summary",
+            "Live report metrics based on the loaded dataset, trained model, and latest prediction."
+        )
+
+        self.report_metric_tiles = {}
+        tiles_frame = tk.Frame(summary_card, bg=self.colors['white'])
+        tiles_frame.pack(fill='x', padx=22, pady=(0, 14))
+
+        metric_specs = [
+            ("Dataset Rows", "dataset_rows"),
+            ("Features", "features"),
+            ("Avg Score", "avg_score"),
+            ("Model Status", "model_status")
+        ]
+
+        for index, (title, key) in enumerate(metric_specs):
+            tile = tk.Frame(
+                tiles_frame,
+                bg=self.colors['panel'],
+                highlightthickness=1,
+                highlightbackground=self.colors['border'],
+                bd=0
+            )
+            tile.grid(row=0, column=index, padx=(0 if index == 0 else 10, 0), sticky='nsew')
+            tiles_frame.grid_columnconfigure(index, weight=1)
+
+            tk.Label(
+                tile,
+                text=title,
+                font=self.fonts['body'],
+                fg=self.colors['secondary'],
+                bg=self.colors['panel']
+            ).pack(anchor='w', padx=14, pady=(12, 4))
+
+            value_label = tk.Label(
+                tile,
+                text="--",
+                font=self.fonts['section'],
+                fg=self.colors['primary'],
+                bg=self.colors['panel']
+            )
+            value_label.pack(anchor='w', padx=14)
+
+            detail_label = tk.Label(
+                tile,
+                text="Waiting for data",
+                font=self.fonts['body'],
+                fg=self.colors['gray'],
+                bg=self.colors['panel']
+            )
+            detail_label.pack(anchor='w', padx=14, pady=(2, 12))
+
+            self.report_metric_tiles[key] = {
+                'value': value_label,
+                'detail': detail_label
+            }
+
+        self.report_visual_text = self.create_text_surface(summary_card, font=self.fonts['body'], height=7)
+        self.report_visual_text.pack(fill='x', padx=22, pady=(0, 20))
+
         display_card = self.create_card(reports_frame, fill='both', expand=True, padx=22, pady=(0, 22))
         self.create_section_title(
             display_card,
@@ -797,6 +860,89 @@ class StudentPerformanceGUI:
 
         self.report_display = self.create_text_surface(display_card, font=self.fonts['mono'], height=20)
         self.report_display.pack(fill='both', expand=True, padx=22, pady=(0, 20))
+        self.update_report_visual_summary()
+
+    def update_report_visual_summary(self):
+        """Update the report tab visual summary widgets."""
+        if not hasattr(self, 'report_metric_tiles'):
+            return
+
+        rows = len(self.current_data) if self.current_data is not None else 0
+        cols = len(self.current_data.columns) if self.current_data is not None else 0
+
+        avg_score = None
+        if self.current_data is not None and TARGET in self.current_data.columns:
+            avg_score = pd.to_numeric(self.current_data[TARGET], errors='coerce').mean()
+
+        model_name = self.model_trainer.best_model_name if self.model_trainer.best_model_name else "Not trained"
+        latest_category = self.last_prediction.get('category') if self.last_prediction else "No prediction"
+
+        self.report_metric_tiles['dataset_rows']['value'].config(text=f"{rows:,}" if rows else "--")
+        self.report_metric_tiles['dataset_rows']['detail'].config(
+            text="Loaded records" if rows else "No dataset loaded"
+        )
+
+        self.report_metric_tiles['features']['value'].config(text=str(cols) if cols else "--")
+        self.report_metric_tiles['features']['detail'].config(
+            text="Available columns" if cols else "Waiting for CSV"
+        )
+
+        avg_score_available = avg_score is not None and pd.notna(avg_score)
+        self.report_metric_tiles['avg_score']['value'].config(
+            text=f"{avg_score:.1f}" if avg_score_available else "--"
+        )
+        self.report_metric_tiles['avg_score']['detail'].config(
+            text="Mean overall score" if avg_score_available else "Target not available"
+        )
+
+        self.report_metric_tiles['model_status']['value'].config(
+            text="Ready" if self.model_trainer.best_model_name else "--"
+        )
+        self.report_metric_tiles['model_status']['detail'].config(text=model_name)
+
+        self.report_visual_text.delete(1.0, tk.END)
+        self.report_visual_text.insert(tk.END, "REPORT SNAPSHOT\n")
+        self.report_visual_text.insert(tk.END, "=" * 48 + "\n")
+
+        if rows:
+            coverage_blocks = min(20, max(1, rows // 1500))
+            self.report_visual_text.insert(
+                tk.END,
+                f"Dataset coverage : {'#' * coverage_blocks}\n"
+            )
+        else:
+            self.report_visual_text.insert(tk.END, "Dataset coverage : No dataset loaded\n")
+
+        if avg_score_available:
+            score_blocks = int(max(0, min(20, round(avg_score / 5))))
+            self.report_visual_text.insert(
+                tk.END,
+                f"Average score    : {'#' * score_blocks}{'.' * (20 - score_blocks)} {avg_score:.1f}/100\n"
+            )
+        else:
+            self.report_visual_text.insert(tk.END, "Average score    : Target column not available\n")
+
+        r2_score = self.model_trainer.model_metrics.get('r2') if self.model_trainer.model_metrics else None
+        if isinstance(r2_score, (int, float)):
+            r2_blocks = int(max(0, min(20, round(r2_score * 20))))
+            self.report_visual_text.insert(
+                tk.END,
+                f"Model strength   : {'#' * r2_blocks}{'.' * (20 - r2_blocks)} R2 {r2_score:.2f}\n"
+            )
+        else:
+            self.report_visual_text.insert(tk.END, "Model strength   : Train a model to see quality metrics\n")
+
+        self.report_visual_text.insert(tk.END, f"Latest outcome   : {latest_category}\n")
+
+        if self.last_prediction:
+            student_name = self.last_prediction.get('name', 'Student')
+            score = float(self.last_prediction.get('score', 0))
+            self.report_visual_text.insert(
+                tk.END,
+                f"Latest student   : {student_name} ({score:.1f}/100)\n"
+            )
+        else:
+            self.report_visual_text.insert(tk.END, "Latest student   : No prediction saved yet\n")
     
     def create_status_bar(self):
         """Create status bar"""
@@ -845,6 +991,7 @@ class StudentPerformanceGUI:
                 self.current_data = pd.read_csv(filename)
                 self.current_page = 0
                 self.refresh_data_preview()
+                self.update_report_visual_summary()
                 self.update_status(f"Dataset loaded: {self.current_data.shape[0]} rows", 'success')
                 
                 if 'Dataset Status' in self.status_cards:
@@ -902,6 +1049,7 @@ class StudentPerformanceGUI:
             self._update_training_text(f"📈 Best R² Score: {self.model_trainer.model_metrics['r2']:.4f}\n")
             
             self.is_model_trained = True
+            self.root.after(0, self.update_report_visual_summary)
             self._update_training_text("\n✅ Model training completed successfully!\n")
             self.update_status("Model training completed!", 'success')
             
@@ -949,25 +1097,14 @@ class StudentPerformanceGUI:
             student_data['science_score'] = float(self.input_vars['science_score'].get()) if self.input_vars['science_score'].get() else 70
             student_data['english_score'] = float(self.input_vars['english_score'].get()) if self.input_vars['english_score'].get() else 70
             
-            # Handle integer fields
-            student_data['internet_access'] = int(float(self.input_vars['internet_access'].get())) if self.input_vars['internet_access'].get() else 1
-            student_data['extra_activities'] = int(float(self.input_vars['extra_activities'].get())) if self.input_vars['extra_activities'].get() else 1
-            
-            # Handle travel_time mapping
-            travel_time_value = self.input_vars['travel_time'].get()
-            travel_time_map = {
-                '<15 min': 0,
-                '15-30 min': 1,
-                '30-60 min': 2,
-                '>60 min': 3
-            }
-            student_data['travel_time'] = travel_time_map.get(travel_time_value, 0)
-            
             # Handle categorical fields
             student_data['gender'] = self.input_vars['gender'].get() if self.input_vars['gender'].get() else "male"
             student_data['school_type'] = self.input_vars['school_type'].get() if self.input_vars['school_type'].get() else "public"
             student_data['parent_education'] = self.input_vars['parent_education'].get() if self.input_vars['parent_education'].get() else "graduate"
             student_data['study_method'] = self.input_vars['study_method'].get() if self.input_vars['study_method'].get() else "textbook"
+            student_data['internet_access'] = self.input_vars['internet_access'].get() if self.input_vars['internet_access'].get() else "yes"
+            student_data['extra_activities'] = self.input_vars['extra_activities'].get() if self.input_vars['extra_activities'].get() else "yes"
+            student_data['travel_time'] = self.input_vars['travel_time'].get() if self.input_vars['travel_time'].get() else "<15 min"
             
             # Extract values for analysis
             math_score = student_data['math_score']
@@ -978,6 +1115,8 @@ class StudentPerformanceGUI:
             travel_time_val = student_data['travel_time']
             extra_activities = student_data['extra_activities']
             internet_access = student_data['internet_access']
+            has_extra_activities = extra_activities == 'yes'
+            has_internet_access = internet_access == 'yes'
             
             # Create DataFrame for prediction
             input_df = pd.DataFrame([student_data])
@@ -989,13 +1128,7 @@ class StudentPerformanceGUI:
             predicted_score = self.model_trainer.predict(X_input)[0]
             predicted_score = max(0, min(100, predicted_score))
             
-            # Travel time text mapping
-            travel_time_text = {
-                0: "Less than 15 minutes",
-                1: "15-30 minutes",
-                2: "30-60 minutes",
-                3: "More than 60 minutes"
-            }.get(travel_time_val, "Unknown")
+            travel_time_text = travel_time_val
             
             # Determine overall category
             if predicted_score >= 85:
@@ -1058,21 +1191,21 @@ class StudentPerformanceGUI:
                 weaknesses.append(f"📈 Attendance: {attendance:.0f}% - Low attendance affects learning")
             
             # Travel time analysis
-            if travel_time_val <= 1:
+            if travel_time_val in ['<15 min', '15-30 min']:
                 strengths.append(f"🚌 Travel Time: {travel_time_text} - Convenient")
-            elif travel_time_val == 2:
+            elif travel_time_val == '30-60 min':
                 weaknesses.append(f"🚌 Travel Time: {travel_time_text} - Consider using travel time for review")
             else:
                 weaknesses.append(f"🚌 Travel Time: {travel_time_text} - Long commute may affect study time")
             
             # Extra activities
-            if extra_activities == 1:
+            if has_extra_activities:
                 strengths.append(f"⭐ Extra Activities: Participating - Good for holistic development")
             else:
                 weaknesses.append(f"⭐ Extra Activities: Not participating - Consider joining activities")
             
             # Internet access
-            if internet_access == 1:
+            if has_internet_access:
                 strengths.append(f"🌐 Internet Access: Available - Good for online learning resources")
             else:
                 weaknesses.append(f"🌐 Internet Access: Limited - Consider library resources")
@@ -1098,10 +1231,10 @@ class StudentPerformanceGUI:
             if attendance < 80:
                 improvement_tips.append("📅 Improve attendance - regular classes are crucial for success")
             
-            if travel_time_val >= 2:
+            if travel_time_val in ['30-60 min', '>60 min']:
                 improvement_tips.append("🎧 Use travel time productively - listen to educational podcasts")
             
-            if extra_activities == 0:
+            if not has_extra_activities:
                 improvement_tips.append("🤝 Join extracurricular activities to develop soft skills")
             
             # Clear and display results
@@ -1166,8 +1299,8 @@ class StudentPerformanceGUI:
             self.result_text.insert(tk.END, f"   [{attendance_bar}] Target: 90%+\n\n")
             
             self.result_text.insert(tk.END, f"🚌 Travel Time: {travel_time_text}\n")
-            self.result_text.insert(tk.END, f"⭐ Extra Activities: {'Yes ✅' if extra_activities == 1 else 'No ❌'}\n")
-            self.result_text.insert(tk.END, f"🌐 Internet Access: {'Available ✅' if internet_access == 1 else 'Limited ❌'}\n\n")
+            self.result_text.insert(tk.END, f"⭐ Extra Activities: {'Yes ✅' if has_extra_activities else 'No ❌'}\n")
+            self.result_text.insert(tk.END, f"🌐 Internet Access: {'Available ✅' if has_internet_access else 'Limited ❌'}\n\n")
             
             # Strengths
             if strengths:
@@ -1209,8 +1342,8 @@ class StudentPerformanceGUI:
                 'science_score': science_score,
                 'english_score': english_score,
                 'study_hours': study_hours,
-                'attendance': attendance,
-                'travel_time_val': travel_time_val,
+                'attendance_percentage': attendance,
+                'travel_time': travel_time_val,
                 'travel_time_text': travel_time_text,
                 'extra_activities': extra_activities,
                 'internet_access': internet_access,
@@ -1222,6 +1355,7 @@ class StudentPerformanceGUI:
                 'data': student_data
             }
             
+            self.update_report_visual_summary()
             self.save_btn.config(state='normal')
             self.update_status("Prediction completed successfully!", 'success')
             
@@ -1232,7 +1366,7 @@ class StudentPerformanceGUI:
             logger.error(f"Prediction error: {traceback.format_exc()}")
     
     def save_prediction(self):
-        """Save prediction to database - FIXED VERSION with dynamic column handling"""
+        """Save prediction to database using dataset-aligned column names."""
         if not self.last_prediction:
             messagebox.showwarning("Warning", "No prediction to save!")
             return
@@ -1257,14 +1391,15 @@ class StudentPerformanceGUI:
                 'school_type': self.last_prediction.get('school_type', 'public'),
                 'parent_education': self.last_prediction.get('parent_education', 'graduate'),
                 'study_hours': float(self.last_prediction.get('study_hours', 5)),
-                'attendance_percentage': float(self.last_prediction.get('attendance', 85)),
-                'internet_access': int(self.last_prediction.get('internet_access', 1)),
-                'travel_time': int(self.last_prediction.get('travel_time_val', 0)),
-                'extra_activities': int(self.last_prediction.get('extra_activities', 1)),
+                'attendance_percentage': float(self.last_prediction.get('attendance_percentage', 85)),
+                'internet_access': self.last_prediction.get('internet_access', 'yes'),
+                'travel_time': self.last_prediction.get('travel_time', '<15 min'),
+                'extra_activities': self.last_prediction.get('extra_activities', 'yes'),
                 'study_method': self.last_prediction.get('study_method', 'textbook'),
                 'math_score': float(self.last_prediction.get('math_score', 70)),
                 'science_score': float(self.last_prediction.get('science_score', 70)),
-                'english_score': float(self.last_prediction.get('english_score', 70))
+                'english_score': float(self.last_prediction.get('english_score', 70)),
+                'overall_score': float(self.last_prediction.get('score', 0))
             }
             
             # Filter to only existing columns
@@ -1323,9 +1458,9 @@ class StudentPerformanceGUI:
             'parent_education': 'graduate',
             'study_hours': 5,
             'attendance_percentage': 85,
-            'internet_access': '1',
+            'internet_access': 'yes',
             'travel_time': '<15 min',
-            'extra_activities': '1',
+            'extra_activities': 'yes',
             'study_method': 'textbook',
             'math_score': 70,
             'science_score': 70,
@@ -1365,6 +1500,7 @@ class StudentPerformanceGUI:
                 self.model_trainer.model_metrics = model_data.get('metrics', {})
                 self.preprocessor.load_preprocessors()
                 self.is_model_trained = True
+                self.update_report_visual_summary()
                 self.update_status("Model loaded!", 'success')
                 messagebox.showinfo("Success", "Model loaded successfully!")
             except Exception as e:
@@ -1388,6 +1524,7 @@ class StudentPerformanceGUI:
     
     def show_prediction_history(self):
         """Show prediction history"""
+        self.update_report_visual_summary()
         self.report_display.delete(1.0, tk.END)
         self.report_display.insert(tk.END, "📜 PREDICTION HISTORY\n")
         self.report_display.insert(tk.END, "=" * 50 + "\n\n")
@@ -1408,6 +1545,7 @@ class StudentPerformanceGUI:
     
     def show_student_records(self):
         """Show student records from database"""
+        self.update_report_visual_summary()
         self.report_display.delete(1.0, tk.END)
         self.report_display.insert(tk.END, "👥 STUDENT RECORDS\n")
         self.report_display.insert(tk.END, "=" * 50 + "\n\n")
@@ -1420,10 +1558,18 @@ class StudentPerformanceGUI:
                 
                 if students:
                     self.report_display.insert(tk.END, f"Recent Students (last 50):\n\n")
+                    columns = [desc[0] for desc in cursor.description]
                     for student in students:
-                        self.report_display.insert(tk.END, f"ID: {student[0]} | Name: {student[1]}\n")
-                        # Show available columns dynamically
-                        self.report_display.insert(tk.END, f"   Study Hours: {student[6] if len(student) > 6 else 'N/A'} | Attendance: {student[7] if len(student) > 7 else 'N/A'}%\n")
+                        student_record = dict(zip(columns, student))
+                        student_name = student_record.get('name') or f"Student {student_record.get('student_id', 'N/A')}"
+                        self.report_display.insert(
+                            tk.END,
+                            f"ID: {student_record.get('student_id', 'N/A')} | Name: {student_name}\n"
+                        )
+                        self.report_display.insert(
+                            tk.END,
+                            f"   Study Hours: {student_record.get('study_hours', 'N/A')} | Attendance: {student_record.get('attendance_percentage', 'N/A')}%\n"
+                        )
                         self.report_display.insert(tk.END, "-" * 40 + "\n")
                 else:
                     self.report_display.insert(tk.END, "No student records found in database.")
@@ -1440,6 +1586,7 @@ class StudentPerformanceGUI:
     
     def show_model_performance(self):
         """Show model performance"""
+        self.update_report_visual_summary()
         self.report_display.delete(1.0, tk.END)
         self.report_display.insert(tk.END, "📊 MODEL PERFORMANCE METRICS\n")
         self.report_display.insert(tk.END, "=" * 50 + "\n\n")
@@ -1470,6 +1617,7 @@ class StudentPerformanceGUI:
     
     def show_visualizations(self):
         """Show visualizations"""
+        self.update_report_visual_summary()
         if self.current_data is None:
             messagebox.showwarning("Warning", "No data available for visualization!")
             return

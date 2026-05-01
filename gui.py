@@ -260,7 +260,7 @@ class StudentPerformanceGUI:
 
         version_badge = tk.Label(
             header_frame,
-            text="Version 2.0",
+            text="",
             font=self.fonts['body_bold'],
             fg=self.colors['primary'],
             bg='#dfeaf5',
@@ -778,6 +778,7 @@ class StudentPerformanceGUI:
             ("Prediction History", self.show_prediction_history, 'accent'),
             ("Student Records", self.show_student_records, 'secondary'),
             ("Model Performance", self.show_model_performance, 'success'),
+            ("Feature Importance", self.show_feature_importance_dashboard, 'accent'),
             ("Visualizations", self.show_visualizations, 'warning')
         ]
 
@@ -1032,7 +1033,9 @@ class StudentPerformanceGUI:
             self._update_training_text(f"✅ Data shape: {X.shape}\n")
             self._update_training_text("🎯 Training models...\n\n")
             
-            results, X_test, y_test = self.model_trainer.train_and_evaluate(X, y)
+            results, X_test, y_test = self.model_trainer.train_and_evaluate(
+                X, y, feature_names=FEATURES
+            )
             
             self._update_training_text("📈 Model Performance Results\n")
             self._update_training_text("=" * 50 + "\n\n")
@@ -1048,6 +1051,13 @@ class StudentPerformanceGUI:
             self._update_training_text(f"🏆 Best Model: {self.model_trainer.best_model_name}\n")
             self._update_training_text(f"📈 Best R² Score: {self.model_trainer.model_metrics['r2']:.4f}\n")
             
+            if self.model_trainer.feature_importance:
+                self._update_training_text("\nTop Feature Importance:\n")
+                for item in self.model_trainer.feature_importance[:5]:
+                    self._update_training_text(
+                        f"   - {self.format_feature_name(item['feature'])}: {item['importance'] * 100:.1f}%\n"
+                    )
+
             self.is_model_trained = True
             self.root.after(0, self.update_report_visual_summary)
             self._update_training_text("\n✅ Model training completed successfully!\n")
@@ -1073,6 +1083,36 @@ class StudentPerformanceGUI:
     def _stop_progress(self):
         """Stop progress bar"""
         self.root.after(0, self.progress.stop)
+
+    def format_feature_name(self, feature_name):
+        """Convert raw feature names into user-friendly labels."""
+        return feature_name.replace('_', ' ').title()
+
+    def build_prediction_explanation(self, explanation):
+        """Create readable explanation lines for prediction output."""
+        lines = []
+        baseline = explanation.get('baseline_prediction')
+        if baseline is not None:
+            lines.append(f"Baseline estimate from average profile: {baseline:.1f}/100")
+
+        positive = explanation.get('top_positive', [])
+        negative = explanation.get('top_negative', [])
+
+        if positive:
+            lines.append("Main factors increasing the score:")
+            for item in positive:
+                lines.append(
+                    f"  + {self.format_feature_name(item['feature'])}: {item['contribution']:+.2f}"
+                )
+
+        if negative:
+            lines.append("Main factors lowering the score:")
+            for item in negative:
+                lines.append(
+                    f"  - {self.format_feature_name(item['feature'])}: {item['contribution']:+.2f}"
+                )
+
+        return lines
     
     def predict_performance(self):
         """Make prediction with detailed property analysis and improvement suggestions"""
@@ -1127,6 +1167,8 @@ class StudentPerformanceGUI:
             # Make prediction
             predicted_score = self.model_trainer.predict(X_input)[0]
             predicted_score = max(0, min(100, predicted_score))
+            explanation = self.model_trainer.explain_prediction(X_input)
+            explanation_lines = self.build_prediction_explanation(explanation)
             
             travel_time_text = travel_time_val
             
@@ -1267,6 +1309,13 @@ class StudentPerformanceGUI:
             self.result_text.insert(tk.END, f"📊 Category: {overall_icon} {overall_category}\n", 'category')
             self.result_text.insert(tk.END, "─" * 60 + "\n\n", 'divider')
             
+            # Model explanation
+            self.result_text.insert(tk.END, "Model Explanation\n", 'header')
+            self.result_text.insert(tk.END, "-" * 40 + "\n", 'divider')
+            for line in explanation_lines:
+                self.result_text.insert(tk.END, f"{line}\n", 'tip')
+            self.result_text.insert(tk.END, "\n")
+
             # Subject-wise breakdown
             self.result_text.insert(tk.END, "📋 SUBJECT-WISE BREAKDOWN\n", 'header')
             self.result_text.insert(tk.END, "─" * 40 + "\n", 'divider')
@@ -1352,7 +1401,9 @@ class StudentPerformanceGUI:
                 'school_type': student_data['school_type'],
                 'parent_education': student_data['parent_education'],
                 'study_method': student_data['study_method'],
-                'data': student_data
+                'data': student_data,
+                'explanation': explanation,
+                'explanation_lines': explanation_lines
             }
             
             self.update_report_visual_summary()
@@ -1480,6 +1531,9 @@ class StudentPerformanceGUI:
             try:
                 self.model_trainer.save_model()
                 self.preprocessor.save_preprocessors()
+                if self.current_data is not None:
+                    dataset_path = os.path.join('models', 'training_dataset.csv')
+                    self.current_data.to_csv(dataset_path, index=False)
                 self.update_status("Model saved!", 'success')
                 messagebox.showinfo("Success", "Model saved successfully!")
             except Exception as e:
@@ -1490,20 +1544,52 @@ class StudentPerformanceGUI:
     
     def load_model(self):
         """Load model"""
-        filename = filedialog.askopenfilename(filetypes=[("PKL files", "*.pkl")])
+        filename = filedialog.askopenfilename(
+            title="Select saved model file",
+            initialdir=os.path.abspath('models'),
+            initialfile='best_model.pkl',
+            filetypes=[("Model files", "best_model.pkl"), ("PKL files", "*.pkl")]
+        )
         if filename:
             try:
                 import joblib
                 model_data = joblib.load(filename)
+                if not isinstance(model_data, dict) or 'model' not in model_data:
+                    raise ValueError(
+                        "Selected file is not a saved model. Please choose 'best_model.pkl'."
+                    )
                 self.model_trainer.best_model = model_data['model']
                 self.model_trainer.best_model_name = model_data.get('model_name', 'Loaded')
                 self.model_trainer.model_metrics = model_data.get('metrics', {})
+                self.model_trainer.feature_names = model_data.get('feature_names', FEATURES)
+                self.model_trainer.feature_importance = model_data.get('feature_importance', [])
                 self.preprocessor.load_preprocessors()
                 self.is_model_trained = True
+
+                dataset_path = os.path.join(os.path.dirname(filename), 'training_dataset.csv')
+                if os.path.exists(dataset_path):
+                    self.current_data = pd.read_csv(dataset_path)
+                    self.current_page = 0
+                    self.refresh_data_preview()
+                    if 'Dataset Status' in self.status_cards:
+                        self.status_cards['Dataset Status'].config(
+                            text=f"Loaded ({self.current_data.shape[0]} rows)"
+                        )
+
                 self.update_report_visual_summary()
                 self.update_status("Model loaded!", 'success')
-                messagebox.showinfo("Success", "Model loaded successfully!")
+                if self.current_data is not None:
+                    messagebox.showinfo(
+                        "Success",
+                        "Model loaded successfully!\nSaved dataset preview restored in Data Management."
+                    )
+                else:
+                    messagebox.showinfo(
+                        "Success",
+                        "Model loaded successfully!\nLoad a dataset separately to view Data Management rows."
+                    )
             except Exception as e:
+                self.update_status(f"Failed to load model: {str(e)}", 'error')
                 messagebox.showerror("Error", f"Failed to load model: {str(e)}")
     
     def export_results(self):
@@ -1539,6 +1625,11 @@ class StudentPerformanceGUI:
             self.report_display.insert(tk.END, f"  Math: {self.last_prediction.get('math_score', 0):.0f}\n")
             self.report_display.insert(tk.END, f"  Science: {self.last_prediction.get('science_score', 0):.0f}\n")
             self.report_display.insert(tk.END, f"  English: {self.last_prediction.get('english_score', 0):.0f}\n")
+            explanation_lines = self.last_prediction.get('explanation_lines', [])
+            if explanation_lines:
+                self.report_display.insert(tk.END, "\nModel Explanation:\n")
+                for line in explanation_lines:
+                    self.report_display.insert(tk.END, f"  {line}\n")
         else:
             self.report_display.insert(tk.END, "No predictions made yet.\n")
             self.report_display.insert(tk.END, "Go to Predict Performance tab to make predictions.")
@@ -1611,10 +1702,53 @@ class StudentPerformanceGUI:
             else:
                 self.report_display.insert(tk.END, "❌ Model Quality: Needs Improvement\n")
                 self.report_display.insert(tk.END, "Consider feature engineering or trying different algorithms.")
+            if self.model_trainer.feature_importance:
+                self.report_display.insert(tk.END, "\n\nTop Feature Importance:\n")
+                for item in self.model_trainer.feature_importance[:8]:
+                    self.report_display.insert(
+                        tk.END,
+                        f"  {self.format_feature_name(item['feature'])}: {item['importance'] * 100:.1f}%\n"
+                    )
         else:
             self.report_display.insert(tk.END, "No model trained yet.\n")
             self.report_display.insert(tk.END, "Please train a model first.")
     
+    def show_feature_importance_dashboard(self):
+        """Show feature importance and latest prediction explanation."""
+        self.update_report_visual_summary()
+        self.report_display.delete(1.0, tk.END)
+        self.report_display.insert(tk.END, "FEATURE IMPORTANCE DASHBOARD\n")
+        self.report_display.insert(tk.END, "=" * 50 + "\n\n")
+
+        if not self.model_trainer.best_model_name:
+            self.report_display.insert(tk.END, "No trained model available.\n")
+            self.report_display.insert(tk.END, "Train or load a model first.")
+            return
+
+        self.report_display.insert(tk.END, f"Best Model: {self.model_trainer.best_model_name}\n")
+        r2_value = self.model_trainer.model_metrics.get('r2')
+        if isinstance(r2_value, (int, float)):
+            self.report_display.insert(tk.END, f"R2 Score: {r2_value:.4f}\n")
+        self.report_display.insert(tk.END, "\n")
+
+        if self.model_trainer.feature_importance:
+            self.report_display.insert(tk.END, "Global Importance:\n")
+            for item in self.model_trainer.feature_importance[:10]:
+                bar = "#" * max(1, int(round(item['importance'] * 20)))
+                self.report_display.insert(
+                    tk.END,
+                    f"  {self.format_feature_name(item['feature']):<24} {bar:<20} {item['importance'] * 100:5.1f}%\n"
+                )
+        else:
+            self.report_display.insert(tk.END, "Global importance is not available for this model.\n")
+
+        if self.last_prediction and self.last_prediction.get('explanation_lines'):
+            self.report_display.insert(tk.END, "\nLatest Prediction Explanation:\n")
+            for line in self.last_prediction['explanation_lines']:
+                self.report_display.insert(tk.END, f"  {line}\n")
+        else:
+            self.report_display.insert(tk.END, "\nMake a prediction to see score drivers for one student.\n")
+
     def show_visualizations(self):
         """Show visualizations"""
         self.update_report_visual_summary()

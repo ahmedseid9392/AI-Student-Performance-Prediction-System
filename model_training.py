@@ -37,6 +37,8 @@ class ModelTrainer:
         self.X_test = None
         self.y_train = None
         self.y_test = None
+        self.feature_names = []
+        self.feature_importance = []
     
     def split_data(self, X, y):
         """Split data into 70% training and 30% testing"""
@@ -60,10 +62,13 @@ class ModelTrainer:
         
         return X_train, X_test, y_train, y_test
     
-    def train_and_evaluate(self, X, y):
+    def train_and_evaluate(self, X, y, feature_names=None):
         """Train multiple models and evaluate performance using 70/30 split"""
         logger.info("Starting model training and evaluation...")
         logger.info("="*50)
+        self.feature_names = list(feature_names) if feature_names is not None else [
+            f"Feature {i + 1}" for i in range(X.shape[1])
+        ]
         
         # Split data into 70% training and 30% testing
         X_train, X_test, y_train, y_test = self.split_data(X, y)
@@ -111,6 +116,7 @@ class ModelTrainer:
         self.best_model_name = max(results, key=lambda x: results[x]['r2'])
         self.best_model = results[self.best_model_name]['model']
         self.model_metrics = results[self.best_model_name]
+        self.feature_importance = self.get_feature_importance()
         
         logger.info("="*50)
         logger.info(f"🏆 Best Model: {self.best_model_name}")
@@ -181,6 +187,7 @@ class ModelTrainer:
         self.best_model = grid_search.best_estimator_
         self.model_metrics['r2'] = test_r2
         self.model_metrics['rmse'] = np.sqrt(mean_squared_error(self.y_test, y_pred))
+        self.feature_importance = self.get_feature_importance()
         
         return self.best_model
     
@@ -191,6 +198,65 @@ class ModelTrainer:
         
         predictions = self.best_model.predict(X)
         return predictions
+
+    def get_feature_importance(self):
+        """Return normalized feature importance for the current best model."""
+        if self.best_model is None or not self.feature_names:
+            return []
+
+        raw_importance = None
+        if hasattr(self.best_model, 'feature_importances_'):
+            raw_importance = np.asarray(self.best_model.feature_importances_, dtype=float)
+        elif hasattr(self.best_model, 'coef_'):
+            raw_importance = np.abs(np.asarray(self.best_model.coef_, dtype=float).ravel())
+
+        if raw_importance is None or raw_importance.size == 0:
+            return []
+
+        total = raw_importance.sum()
+        normalized = raw_importance / total if total > 0 else raw_importance
+
+        ranked = [
+            {'feature': feature, 'importance': float(score)}
+            for feature, score in zip(self.feature_names, normalized)
+        ]
+        ranked.sort(key=lambda item: item['importance'], reverse=True)
+        return ranked
+
+    def explain_prediction(self, X):
+        """Estimate how each feature influenced the current prediction."""
+        if self.best_model is None:
+            raise ValueError("Model not trained yet. Call train_and_evaluate first.")
+
+        X_arr = np.asarray(X, dtype=float)
+        if X_arr.ndim == 1:
+            X_arr = X_arr.reshape(1, -1)
+
+        prediction = float(self.best_model.predict(X_arr)[0])
+        baseline_input = np.zeros_like(X_arr)
+        baseline_prediction = float(self.best_model.predict(baseline_input)[0])
+
+        contributions = []
+        for idx, feature_name in enumerate(self.feature_names):
+            ablated = X_arr.copy()
+            ablated[0, idx] = 0.0
+            without_feature_prediction = float(self.best_model.predict(ablated)[0])
+            contribution = prediction - without_feature_prediction
+            contributions.append({
+                'feature': feature_name,
+                'contribution': float(contribution),
+                'abs_contribution': float(abs(contribution))
+            })
+
+        contributions.sort(key=lambda item: item['abs_contribution'], reverse=True)
+
+        return {
+            'prediction': prediction,
+            'baseline_prediction': baseline_prediction,
+            'top_positive': [item for item in contributions if item['contribution'] > 0][:5],
+            'top_negative': [item for item in contributions if item['contribution'] < 0][:5],
+            'all_contributions': contributions
+        }
     
     def get_performance_category(self, score):
         """Convert numerical score to performance category"""
@@ -208,6 +274,8 @@ class ModelTrainer:
             'model': self.best_model,
             'model_name': self.best_model_name,
             'metrics': self.model_metrics,
+            'feature_names': self.feature_names,
+            'feature_importance': self.feature_importance,
             'train_size': len(self.X_train) if self.X_train is not None else 0,
             'test_size': len(self.X_test) if self.X_test is not None else 0,
             'split_ratio': '70/30'
@@ -222,5 +290,7 @@ class ModelTrainer:
         self.best_model = model_data['model']
         self.best_model_name = model_data['model_name']
         self.model_metrics = model_data['metrics']
+        self.feature_names = model_data.get('feature_names', [])
+        self.feature_importance = model_data.get('feature_importance', [])
         logger.info(f"Model loaded from {path}/best_model.pkl")
         logger.info(f"Model was trained with {model_data.get('split_ratio', 'unknown')} split")

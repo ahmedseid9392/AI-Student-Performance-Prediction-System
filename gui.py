@@ -49,6 +49,8 @@ class StudentPerformanceGUI:
         
         # Variables
         self.current_data = None
+        self.filtered_data = None
+        self.last_training_results = None
         self.is_model_trained = False
         self.last_prediction = None
         self.current_page = 0
@@ -528,6 +530,14 @@ class StudentPerformanceGUI:
         )
         export_btn.pack(side='left', padx=(0, 10))
 
+        export_pdf_btn = self.create_action_button(
+            button_frame,
+            "Export PDF",
+            self.export_prediction_pdf,
+            variant='warning'
+        )
+        export_pdf_btn.pack(side='left', padx=(0, 10))
+
         clear_btn = self.create_action_button(
             button_frame,
             "Clear Form",
@@ -594,7 +604,37 @@ class StudentPerformanceGUI:
         self.dataset_info_label = tk.Label(header_frame, text="No dataset loaded", 
                                            font=self.fonts['card_title'],
                                            bg=self.colors['white'], fg=self.colors['primary'])
-        self.dataset_info_label.pack(side='left')
+        self.dataset_info_label.pack(side='top', anchor='w', pady=(0, 8))
+
+        filter_frame = tk.Frame(header_frame, bg=self.colors['white'])
+        filter_frame.pack(fill='x', pady=(0, 10))
+
+        tk.Label(filter_frame, text="Search / Filter:", bg=self.colors['white'],
+                 font=self.fonts['body']).pack(side='left', padx=(0, 8))
+
+        self.search_var = tk.StringVar(value="Search student records...")
+        self.search_entry = tk.Entry(filter_frame, textvariable=self.search_var,
+                                     font=self.fonts['body'], bg='#f5f8fc', fg=self.colors['gray'],
+                                     relief='flat', width=40, bd=0,
+                                     highlightthickness=1, highlightbackground=self.colors['border'],
+                                     highlightcolor=self.colors['accent'], insertbackground=self.colors['primary'])
+        self.search_entry.pack(side='left', padx=(0, 8), fill='x', expand=True, ipady=6)
+        self.search_entry.bind("<FocusIn>", self.clear_search_placeholder)
+        self.search_entry.bind("<FocusOut>", self.add_search_placeholder)
+
+        self.search_column = tk.StringVar(value='All columns')
+        self.search_column_combo = ttk.Combobox(filter_frame, textvariable=self.search_column,
+                                               values=['All columns'], width=20,
+                                               state='readonly', style='Modern.TCombobox')
+        self.search_column_combo.pack(side='left', padx=(0, 8))
+
+        search_btn = self.create_action_button(filter_frame, "Apply", self.apply_data_filter,
+                                               variant='accent', width=8)
+        search_btn.pack(side='left', padx=(0, 8))
+
+        reset_btn = self.create_action_button(filter_frame, "Reset", self.reset_data_filter,
+                                              variant='secondary', width=8)
+        reset_btn.pack(side='left')
 
         pagination_frame = tk.Frame(header_frame, bg=self.colors['white'])
         pagination_frame.pack(side='right')
@@ -674,16 +714,22 @@ class StudentPerformanceGUI:
     def refresh_data_preview(self):
         """Refresh data preview with current pagination settings"""
         if self.current_data is not None:
-            rows, cols = self.current_data.shape
-            self.dataset_info_label.config(text=f"📊 Dataset: {rows:,} rows × {cols} columns")
+            data_source = self.filtered_data if self.filtered_data is not None else self.current_data
+            rows, cols = data_source.shape
+            if self.filtered_data is not None:
+                self.dataset_info_label.config(
+                    text=f"📊 Dataset: {rows:,} rows × {cols} columns (filtered from {len(self.current_data):,})"
+                )
+            else:
+                self.dataset_info_label.config(text=f"📊 Dataset: {rows:,} rows × {cols} columns")
             
             rows_per_page_str = self.rows_per_page.get()
             if rows_per_page_str == "All":
-                rows_per_page = rows
+                rows_per_page = rows if rows > 0 else 1
             else:
                 rows_per_page = int(rows_per_page_str)
             
-            self.total_pages = (rows + rows_per_page - 1) // rows_per_page
+            self.total_pages = max(1, (rows + rows_per_page - 1) // rows_per_page)
             
             if self.current_page >= self.total_pages:
                 self.current_page = self.total_pages - 1
@@ -693,7 +739,7 @@ class StudentPerformanceGUI:
             start_idx = self.current_page * rows_per_page
             end_idx = min(start_idx + rows_per_page, rows)
             
-            self.displayed_data = self.current_data.iloc[start_idx:end_idx]
+            self.displayed_data = data_source.iloc[start_idx:end_idx]
             self.update_treeview()
             
             self.page_var.set(f"Page {self.current_page + 1} of {max(1, self.total_pages)}")
@@ -731,6 +777,11 @@ class StudentPerformanceGUI:
             self.stats_text.insert(tk.END, "=" * 50 + "\n\n")
             self.stats_text.insert(tk.END, f"Total Rows: {rows:,}\n")
             self.stats_text.insert(tk.END, f"Total Columns: {cols}\n\n")
+            if self.filtered_data is not None:
+                self.stats_text.insert(
+                    tk.END,
+                    f"Filtered Rows: {len(self.filtered_data):,} of {rows:,}\n\n"
+                )
             
             missing = self.current_data.isnull().sum()
             if missing.sum() > 0:
@@ -744,6 +795,54 @@ class StudentPerformanceGUI:
                 for col in numeric_cols[:5]:
                     self.stats_text.insert(tk.END, f"  {col}: {self.current_data[col].mean():.2f} ± {self.current_data[col].std():.2f}\n")
     
+    def clear_search_placeholder(self, event=None):
+        if self.search_var.get() == "Search student records...":
+            self.search_var.set('')
+            self.search_entry.config(fg=self.colors['primary'])
+
+    def add_search_placeholder(self, event=None):
+        if not self.search_var.get().strip():
+            self.search_var.set("Search student records...")
+            self.search_entry.config(fg=self.colors['gray'])
+
+    def apply_data_filter(self):
+        """Filter the loaded dataset by search terms and selected column."""
+        if self.current_data is None:
+            return
+
+        query = self.search_var.get().strip()
+        if query == "Search student records..." or not query:
+            self.reset_data_filter()
+            return
+
+        column = self.search_column.get()
+        if column == 'All columns':
+            mask = self.current_data.astype(str).apply(
+                lambda col: col.str.contains(query, case=False, na=False)
+            ).any(axis=1)
+        else:
+            if column not in self.current_data.columns:
+                messagebox.showwarning("Warning", "Selected filter column is not available.")
+                return
+            mask = self.current_data[column].astype(str).str.contains(query, case=False, na=False)
+
+        self.filtered_data = self.current_data[mask].copy()
+        self.current_page = 0
+        self.refresh_data_preview()
+        self.update_status(f"Filtered data: {len(self.filtered_data):,} rows match '{query}'", 'info')
+
+    def reset_data_filter(self):
+        """Reset data filtering and show the full loaded dataset."""
+        if self.current_data is None:
+            return
+
+        self.filtered_data = None
+        self.search_var.set('Search student records...')
+        self.search_entry.config(fg=self.colors['gray'])
+        self.search_column.set('All columns')
+        self.refresh_data_preview()
+        self.update_status("Filter reset. Showing all loaded rows.", 'info')
+
     def prev_page(self):
         """Go to previous page"""
         if self.current_page > 0:
@@ -778,6 +877,7 @@ class StudentPerformanceGUI:
             ("Prediction History", self.show_prediction_history, 'accent'),
             ("Student Records", self.show_student_records, 'secondary'),
             ("Model Performance", self.show_model_performance, 'success'),
+            ("Model Comparison", self.show_model_comparison_chart, 'accent'),
             ("Feature Importance", self.show_feature_importance_dashboard, 'accent'),
             ("Visualizations", self.show_visualizations, 'warning')
         ]
@@ -856,11 +956,25 @@ class StudentPerformanceGUI:
         self.create_section_title(
             display_card,
             "Report Viewer",
-            "Generated report content will be displayed in this panel."
+            "Browse report tables and inspect details in one place."
         )
 
-        self.report_display = self.create_text_surface(display_card, font=self.fonts['mono'], height=20)
-        self.report_display.pack(fill='both', expand=True, padx=22, pady=(0, 20))
+        table_frame = tk.Frame(display_card, bg=self.colors['white'])
+        table_frame.pack(fill='both', expand=True, padx=22, pady=(0, 10))
+
+        self.report_table = ttk.Treeview(table_frame, style='Custom.Treeview', show='headings')
+        self.report_table.pack(side='left', fill='both', expand=True)
+
+        report_vsb = ttk.Scrollbar(table_frame, orient='vertical', command=self.report_table.yview)
+        report_vsb.pack(side='right', fill='y')
+        self.report_table.configure(yscrollcommand=report_vsb.set)
+
+        report_hsb = ttk.Scrollbar(display_card, orient='horizontal', command=self.report_table.xview)
+        report_hsb.pack(fill='x', padx=22)
+        self.report_table.configure(xscrollcommand=report_hsb.set)
+
+        self.report_detail_text = self.create_text_surface(display_card, font=self.fonts['mono'], height=8)
+        self.report_detail_text.pack(fill='x', padx=22, pady=(0, 20))
         self.update_report_visual_summary()
 
     def update_report_visual_summary(self):
@@ -944,6 +1058,43 @@ class StudentPerformanceGUI:
             )
         else:
             self.report_visual_text.insert(tk.END, "Latest student   : No prediction saved yet\n")
+
+    def clear_report_table(self):
+        """Clear the report table contents."""
+        for item in self.report_table.get_children():
+            self.report_table.delete(item)
+        self.report_table['columns'] = []
+
+    def render_report_table(self, dataframe, headers=None):
+        """Render a pandas DataFrame into the report table."""
+        self.clear_report_table()
+        if dataframe is None or dataframe.empty:
+            self.report_detail_text.delete(1.0, tk.END)
+            self.report_detail_text.insert(tk.END, "No report data available.\n")
+            return
+
+        if headers is None:
+            headers = list(dataframe.columns)
+
+        self.report_table['columns'] = headers
+        for col in headers:
+            self.report_table.heading(col, text=col)
+            self.report_table.column(col, width=130, minwidth=80, stretch=True)
+
+        for _, row in dataframe.iterrows():
+            values = [str(row[col]) for col in headers]
+            self.report_table.insert('', 'end', values=values)
+
+        self.report_detail_text.delete(1.0, tk.END)
+        self.report_detail_text.insert(tk.END, f"Showing {len(dataframe)} rows in report table.\n")
+
+    def show_report_message(self, title, lines):
+        """Show a short report message in the detail area."""
+        self.report_detail_text.delete(1.0, tk.END)
+        self.report_detail_text.insert(tk.END, f"{title}\n")
+        self.report_detail_text.insert(tk.END, "=" * len(title) + "\n")
+        for line in lines:
+            self.report_detail_text.insert(tk.END, f"{line}\n")
     
     def create_status_bar(self):
         """Create status bar"""
@@ -990,7 +1141,11 @@ class StudentPerformanceGUI:
         if filename:
             try:
                 self.current_data = pd.read_csv(filename)
+                self.filtered_data = None
                 self.current_page = 0
+                self.search_var.set('')
+                self.search_column.set('All columns')
+                self.search_column_combo.config(values=['All columns'] + list(self.current_data.columns))
                 self.refresh_data_preview()
                 self.update_report_visual_summary()
                 self.update_status(f"Dataset loaded: {self.current_data.shape[0]} rows", 'success')
@@ -1037,6 +1192,7 @@ class StudentPerformanceGUI:
                 X, y, feature_names=FEATURES
             )
             
+            self.last_training_results = results
             self._update_training_text("📈 Model Performance Results\n")
             self._update_training_text("=" * 50 + "\n\n")
             
@@ -1607,147 +1763,261 @@ class StudentPerformanceGUI:
                     messagebox.showerror("Error", f"Failed to export: {str(e)}")
         else:
             messagebox.showwarning("Warning", "No prediction to export!")
-    
+
+    def _sanitize_pdf_line(self, line):
+        """Clean text for PDF output by removing unsupported characters."""
+        return line.encode('ascii', 'ignore').decode('ascii')
+
+    def export_prediction_pdf(self):
+        """Export the latest prediction report to PDF."""
+        if not self.last_prediction:
+            messagebox.showwarning("Warning", "No prediction available to export as PDF.")
+            return
+
+        filename = filedialog.asksaveasfilename(defaultextension=".pdf",
+                                                filetypes=[("PDF files", "*.pdf")])
+        if not filename:
+            return
+
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.pdfgen.canvas import Canvas
+        except ImportError:
+            messagebox.showerror(
+                "Missing Dependency",
+                "ReportLab is required to export PDF reports. Install it with 'pip install reportlab'."
+            )
+            return
+
+        report_text = self.result_text.get(1.0, tk.END).strip()
+        lines = [self._sanitize_pdf_line(line) for line in report_text.splitlines() if line.strip()]
+
+        canvas = Canvas(filename, pagesize=letter)
+        width, height = letter
+        x_margin = 40
+        y_position = height - 40
+        line_height = 14
+
+        canvas.setFont("Helvetica-Bold", 14)
+        canvas.drawString(x_margin, y_position, "Student Performance Prediction Report")
+        y_position -= line_height * 2
+        canvas.setFont("Helvetica", 10)
+
+        for raw_line in lines:
+            wrapped = []
+            if not raw_line:
+                wrapped.append("")
+            else:
+                words = raw_line.split(' ')
+                current_line = ''
+                for word in words:
+                    test_line = f"{current_line} {word}".strip()
+                    if canvas.stringWidth(test_line, "Helvetica", 10) > width - x_margin * 2:
+                        wrapped.append(current_line)
+                        current_line = word
+                    else:
+                        current_line = test_line
+                if current_line:
+                    wrapped.append(current_line)
+
+            for line in wrapped:
+                if y_position < 40:
+                    canvas.showPage()
+                    y_position = height - 40
+                    canvas.setFont("Helvetica", 10)
+
+                canvas.drawString(x_margin, y_position, line)
+                y_position -= line_height
+
+        canvas.save()
+        self.update_status("PDF report exported!", 'success')
+        messagebox.showinfo("Success", f"Prediction report exported to:\n{filename}")
+
     def show_prediction_history(self):
         """Show prediction history"""
         self.update_report_visual_summary()
-        self.report_display.delete(1.0, tk.END)
-        self.report_display.insert(tk.END, "📜 PREDICTION HISTORY\n")
-        self.report_display.insert(tk.END, "=" * 50 + "\n\n")
-        
+
         if hasattr(self, 'last_prediction') and self.last_prediction:
-            self.report_display.insert(tk.END, f"Latest Prediction:\n")
-            self.report_display.insert(tk.END, f"  Student: {self.last_prediction.get('name', 'N/A')}\n")
-            self.report_display.insert(tk.END, f"  Score: {self.last_prediction.get('score', 0):.1f}/100\n")
-            self.report_display.insert(tk.END, f"  Category: {self.last_prediction.get('category', 'N/A')}\n")
-            self.report_display.insert(tk.END, f"  Date: {self.last_prediction.get('date', 'N/A')}\n")
-            self.report_display.insert(tk.END, f"\n📊 Subject Scores:\n")
-            self.report_display.insert(tk.END, f"  Math: {self.last_prediction.get('math_score', 0):.0f}\n")
-            self.report_display.insert(tk.END, f"  Science: {self.last_prediction.get('science_score', 0):.0f}\n")
-            self.report_display.insert(tk.END, f"  English: {self.last_prediction.get('english_score', 0):.0f}\n")
+            data = [{
+                'Student': self.last_prediction.get('name', 'N/A'),
+                'Overall Score': f"{self.last_prediction.get('score', 0):.1f}",
+                'Category': self.last_prediction.get('category', 'N/A'),
+                'Date': self.last_prediction.get('date', 'N/A'),
+                'Math Score': self.last_prediction.get('math_score', 0),
+                'Science Score': self.last_prediction.get('science_score', 0),
+                'English Score': self.last_prediction.get('english_score', 0)
+            }]
+            df = pd.DataFrame(data)
+            self.render_report_table(df)
+
+            detail_lines = [
+                f"Latest student prediction for {self.last_prediction.get('name', 'N/A')}",
+                f"Overall score: {self.last_prediction.get('score', 0):.1f}/100",
+                f"Category: {self.last_prediction.get('category', 'N/A')}",
+                f"Date: {self.last_prediction.get('date', 'N/A')}"
+            ]
             explanation_lines = self.last_prediction.get('explanation_lines', [])
             if explanation_lines:
-                self.report_display.insert(tk.END, "\nModel Explanation:\n")
-                for line in explanation_lines:
-                    self.report_display.insert(tk.END, f"  {line}\n")
+                detail_lines.append("Model Explanation:")
+                detail_lines.extend(explanation_lines)
+
+            self.show_report_message("Prediction History", detail_lines)
         else:
-            self.report_display.insert(tk.END, "No predictions made yet.\n")
-            self.report_display.insert(tk.END, "Go to Predict Performance tab to make predictions.")
+            self.clear_report_table()
+            self.show_report_message(
+                "Prediction History",
+                [
+                    "No predictions made yet.",
+                    "Go to Predict Performance tab to make predictions."
+                ]
+            )
     
     def show_student_records(self):
         """Show student records from database"""
         self.update_report_visual_summary()
-        self.report_display.delete(1.0, tk.END)
-        self.report_display.insert(tk.END, "👥 STUDENT RECORDS\n")
-        self.report_display.insert(tk.END, "=" * 50 + "\n\n")
-        
+
         if self.db_manager:
             try:
-                cursor = self.db_manager.connection.cursor()
-                cursor.execute("SELECT * FROM students ORDER BY created_at DESC LIMIT 50")
-                students = cursor.fetchall()
-                
-                if students:
-                    self.report_display.insert(tk.END, f"Recent Students (last 50):\n\n")
-                    columns = [desc[0] for desc in cursor.description]
-                    for student in students:
-                        student_record = dict(zip(columns, student))
-                        student_name = student_record.get('name') or f"Student {student_record.get('student_id', 'N/A')}"
-                        self.report_display.insert(
-                            tk.END,
-                            f"ID: {student_record.get('student_id', 'N/A')} | Name: {student_name}\n"
-                        )
-                        self.report_display.insert(
-                            tk.END,
-                            f"   Study Hours: {student_record.get('study_hours', 'N/A')} | Attendance: {student_record.get('attendance_percentage', 'N/A')}%\n"
-                        )
-                        self.report_display.insert(tk.END, "-" * 40 + "\n")
+                df = pd.read_sql(
+                    "SELECT student_id, name, age, gender, school_type, parent_education, "
+                    "study_hours, attendance_percentage, internet_access, travel_time, extra_activities, "
+                    "study_method, math_score, science_score, english_score, overall_score, final_grade, created_at "
+                    "FROM students ORDER BY created_at DESC LIMIT 100",
+                    self.db_manager.connection
+                )
+                if df.empty:
+                    self.clear_report_table()
+                    self.show_report_message("Student Records", ["No student records found in database."])
                 else:
-                    self.report_display.insert(tk.END, "No student records found in database.")
+                    self.render_report_table(df)
+                    self.show_report_message(
+                        "Student Records",
+                        [f"Showing {len(df)} student records from database."]
+                    )
             except Exception as e:
-                self.report_display.insert(tk.END, f"Error loading records: {str(e)}")
+                self.clear_report_table()
+                self.show_report_message("Student Records Error", [str(e)])
         elif self.current_data is not None:
-            self.report_display.insert(tk.END, f"Total Students in Dataset: {len(self.current_data)}\n")
-            self.report_display.insert(tk.END, f"Features: {len(self.current_data.columns)}\n\n")
-            self.report_display.insert(tk.END, "Sample Records (first 20):\n")
-            self.report_display.insert(tk.END, self.current_data.head(20).to_string())
+            sample_df = self.current_data.head(100).copy()
+            self.render_report_table(sample_df)
+            self.show_report_message(
+                "Student Records",
+                [f"Displaying first {len(sample_df)} rows from the loaded dataset."]
+            )
         else:
-            self.report_display.insert(tk.END, "No dataset loaded and database not available.\n")
-            self.report_display.insert(tk.END, "Please load a dataset or connect to database.")
+            self.clear_report_table()
+            self.show_report_message(
+                "Student Records",
+                ["No dataset loaded and database not available.", "Please load a dataset or connect to database."]
+            )
     
     def show_model_performance(self):
         """Show model performance"""
         self.update_report_visual_summary()
-        self.report_display.delete(1.0, tk.END)
-        self.report_display.insert(tk.END, "📊 MODEL PERFORMANCE METRICS\n")
-        self.report_display.insert(tk.END, "=" * 50 + "\n\n")
-        
-        if self.model_trainer.best_model_name:
-            self.report_display.insert(tk.END, f"🏆 Best Model: {self.model_trainer.best_model_name}\n")
-            self.report_display.insert(tk.END, f"📈 R² Score: {self.model_trainer.model_metrics.get('r2', 'N/A'):.4f}\n")
-            self.report_display.insert(tk.END, f"📉 RMSE: {self.model_trainer.model_metrics.get('rmse', 'N/A'):.4f}\n")
-            self.report_display.insert(tk.END, f"📊 MAE: {self.model_trainer.model_metrics.get('mae', 'N/A'):.4f}\n\n")
-            
-            # Performance interpretation
-            r2 = self.model_trainer.model_metrics.get('r2', 0)
-            if r2 > 0.8:
-                self.report_display.insert(tk.END, "✅ Model Quality: Excellent\n")
-                self.report_display.insert(tk.END, "The model shows strong predictive capability.")
-            elif r2 > 0.6:
-                self.report_display.insert(tk.END, "👍 Model Quality: Good\n")
-                self.report_display.insert(tk.END, "The model shows reasonable predictive capability.")
-            elif r2 > 0.4:
-                self.report_display.insert(tk.END, "⚠️ Model Quality: Average\n")
-                self.report_display.insert(tk.END, "Consider adding more features or collecting more data.")
-            else:
-                self.report_display.insert(tk.END, "❌ Model Quality: Needs Improvement\n")
-                self.report_display.insert(tk.END, "Consider feature engineering or trying different algorithms.")
-            if self.model_trainer.feature_importance:
-                self.report_display.insert(tk.END, "\n\nTop Feature Importance:\n")
-                for item in self.model_trainer.feature_importance[:8]:
-                    self.report_display.insert(
-                        tk.END,
-                        f"  {self.format_feature_name(item['feature'])}: {item['importance'] * 100:.1f}%\n"
-                    )
+
+        if self.last_training_results:
+            rows = []
+            for name, metrics in self.last_training_results.items():
+                rows.append({
+                    'Model': name,
+                    'R2 Score': metrics.get('r2', None),
+                    'RMSE': metrics.get('rmse', None),
+                    'MAE': metrics.get('mae', None),
+                    'CV Mean': metrics.get('cv_mean', None),
+                    'CV Std': metrics.get('cv_std', None)
+                })
+            df = pd.DataFrame(rows)
+            self.render_report_table(df)
+            self.show_report_message(
+                "Model Performance",
+                [
+                    f"Best Model: {self.model_trainer.best_model_name}",
+                    f"R2 Score: {self.model_trainer.model_metrics.get('r2', 'N/A'):.4f}",
+                    f"RMSE: {self.model_trainer.model_metrics.get('rmse', 'N/A'):.4f}",
+                    f"MAE: {self.model_trainer.model_metrics.get('mae', 'N/A'):.4f}"
+                ]
+            )
+        elif self.model_trainer.best_model_name:
+            self.clear_report_table()
+            self.show_report_message(
+                "Model Performance",
+                [
+                    "A trained model exists, but no detailed training history is available.",
+                    f"Best Model: {self.model_trainer.best_model_name}"
+                ]
+            )
         else:
-            self.report_display.insert(tk.END, "No model trained yet.\n")
-            self.report_display.insert(tk.END, "Please train a model first.")
-    
+            self.clear_report_table()
+            self.show_report_message("Model Performance", ["No model trained yet.", "Please train a model first."])
+
+    def show_model_comparison_chart(self):
+        """Show a comparative chart of model metrics after training."""
+        self.update_report_visual_summary()
+        if not self.last_training_results:
+            messagebox.showwarning("Warning", "Train a model first to see comparison charts.")
+            return
+
+        viz_window = tk.Toplevel(self.root)
+        viz_window.title("📊 Model Comparison")
+        viz_window.geometry("1120x720")
+        viz_window.configure(bg=self.colors['light'])
+
+        models = list(self.last_training_results.keys())
+        r2_scores = [self.last_training_results[name]['r2'] for name in models]
+        rmse_values = [self.last_training_results[name]['rmse'] for name in models]
+
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        fig.patch.set_facecolor(self.colors['light'])
+
+        axes[0].barh(models, r2_scores, color=self.colors['accent'])
+        axes[0].set_title('Model R² Comparison', fontsize=14, fontweight='bold')
+        axes[0].set_xlabel('R² Score')
+        axes[0].set_xlim(0, max(r2_scores + [1.0]))
+        axes[0].grid(axis='x', alpha=0.3)
+
+        axes[1].barh(models, rmse_values, color=self.colors['warning'])
+        axes[1].set_title('Model RMSE Comparison', fontsize=14, fontweight='bold')
+        axes[1].set_xlabel('RMSE')
+        axes[1].invert_yaxis()
+        axes[1].grid(axis='x', alpha=0.3)
+
+        fig.tight_layout(pad=3)
+
+        canvas = FigureCanvasTkAgg(fig, viz_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True, padx=10, pady=10)
+
+        close_btn = tk.Button(viz_window, text="Close", command=viz_window.destroy,
+                              font=self.fonts['body'], bg=self.colors['accent'], fg='white',
+                              activebackground=self.colors['accent_dark'], relief='flat', bd=0,
+                              padx=20, pady=8, cursor='hand2')
+        close_btn.pack(pady=(0, 12))
+
     def show_feature_importance_dashboard(self):
         """Show feature importance and latest prediction explanation."""
         self.update_report_visual_summary()
-        self.report_display.delete(1.0, tk.END)
-        self.report_display.insert(tk.END, "FEATURE IMPORTANCE DASHBOARD\n")
-        self.report_display.insert(tk.END, "=" * 50 + "\n\n")
 
         if not self.model_trainer.best_model_name:
-            self.report_display.insert(tk.END, "No trained model available.\n")
-            self.report_display.insert(tk.END, "Train or load a model first.")
+            self.clear_report_table()
+            self.show_report_message("Feature Importance", ["No trained model available.", "Train or load a model first."])
             return
 
-        self.report_display.insert(tk.END, f"Best Model: {self.model_trainer.best_model_name}\n")
-        r2_value = self.model_trainer.model_metrics.get('r2')
-        if isinstance(r2_value, (int, float)):
-            self.report_display.insert(tk.END, f"R2 Score: {r2_value:.4f}\n")
-        self.report_display.insert(tk.END, "\n")
-
         if self.model_trainer.feature_importance:
-            self.report_display.insert(tk.END, "Global Importance:\n")
-            for item in self.model_trainer.feature_importance[:10]:
-                bar = "#" * max(1, int(round(item['importance'] * 20)))
-                self.report_display.insert(
-                    tk.END,
-                    f"  {self.format_feature_name(item['feature']):<24} {bar:<20} {item['importance'] * 100:5.1f}%\n"
-                )
+            df = pd.DataFrame([{
+                'Feature': self.format_feature_name(item['feature']),
+                'Importance': item['importance']
+            } for item in self.model_trainer.feature_importance])
+            self.render_report_table(df)
+            detail_lines = [f"Best Model: {self.model_trainer.best_model_name}"]
+            if self.last_prediction and self.last_prediction.get('explanation_lines'):
+                detail_lines.append("Latest Prediction Explanation:")
+                detail_lines.extend(self.last_prediction['explanation_lines'])
+            else:
+                detail_lines.append("Make a prediction to see score drivers for one student.")
+            self.show_report_message("Feature Importance", detail_lines)
         else:
-            self.report_display.insert(tk.END, "Global importance is not available for this model.\n")
-
-        if self.last_prediction and self.last_prediction.get('explanation_lines'):
-            self.report_display.insert(tk.END, "\nLatest Prediction Explanation:\n")
-            for line in self.last_prediction['explanation_lines']:
-                self.report_display.insert(tk.END, f"  {line}\n")
-        else:
-            self.report_display.insert(tk.END, "\nMake a prediction to see score drivers for one student.\n")
+            self.clear_report_table()
+            self.show_report_message("Feature Importance", ["Global importance is not available for this model."])
 
     def show_visualizations(self):
         """Show visualizations"""
